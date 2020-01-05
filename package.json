@@ -1,0 +1,37 @@
+{
+  "name": "tile-mixer",
+  "version": "0.0.0",
+  "description": "Load vector tiles, re-mixing the layers based on a Mapbox style document",
+  "main": "dist/tile-mixer.bundle.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "rollup -c build/rollup.config.js",
+    "postversion": "git push && git push --tags"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GlobeletJS/tile-mixer.git"
+  },
+  "keywords": [
+    "vector",
+    "map",
+    "tile",
+    "style",
+    "geojson"
+  ],
+  "author": "Jeshurun Hembd",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/GlobeletJS/tile-mixer/issues"
+  },
+  "homepage": "https://github.com/GlobeletJS/tile-mixer#readme",
+  "devDependencies": {
+    "rollup": "^1.28.0",
+    "rollup-plugin-commonjs": "^10.1.0",
+    "rollup-plugin-node-resolve": "^5.2.0"
+  },
+  "dependencies": {
+    "pbf": "^3.2.1",
+    "vector-tile-esm": "^2.1.0"
+  }
+}
