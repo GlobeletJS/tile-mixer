@@ -3,7 +3,7 @@ import commonjs from 'rollup-plugin-commonjs'; // Needed for pbf module
 import pkg from "../package.json";
 
 export default [{
-  input: 'src/index.js',
+  input: 'src/main.js',
   plugins: [
     resolve(),
   ],

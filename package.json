@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "description": "Load vector tiles, re-mixing the layers based on a Mapbox style document",
   "main": "dist/tile-mixer.bundle.js",
+  "module": "dist/tile-mixer.bundle.js",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "rollup -c build/rollup.config.js",

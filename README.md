@@ -2,15 +2,15 @@
 
 Load vector tiles, re-mixing the layers based on a Mapbox style document
 
-Tiles are requested (via HTTP) from the URL endpoint specified in the style
-document's 'sources' property. The data is then parsed from the
-[Mapbox vector tile] format to [GeoJSON].
+Tiles are requested (via HTTP) from the URL endpoints specified in one of the
+sources specified in the style document's 'sources' property. The data is then 
+parsed from the [Mapbox vector tile] format to [GeoJSON].
 
 The raw tile data is organized into a set of layers determined by the tile
 provider. But for rendering in maps, a new layer definition is specified by the
 map designer in the [Mapbox style document]. tile-mixer filters and re-orders
 the tile data into a new layers object, where the keys are the names of the
-style layers, and the values are GeoJSON FeatureCollections.
+*style* layers, and the values are GeoJSON FeatureCollections.
 
 [Mapbox vector tile]: https://github.com/mapbox/vector-tile-spec
 [GeoJSON]: https://en.wikipedia.org/wiki/GeoJSON
@@ -45,8 +45,8 @@ The supplied parameters object has the following properties
 ## API
 Initialization returns an object with the following methods:
 - `.request(z, x, y, callback)`: Requests a tile at the given coordinate
-  indices, and executes a callback when complete. Returns an integer task ID
-  for this request
+  indices, and executes the supplied callback when complete. Returns an integer 
+  task ID for this request
 - `.cancel(taskID)`: Cancels any active HTTP requests or processing tasks
   associated with the supplied integer ID
 - `.activeTasks()`: Returns the (integer) number of active tasks
