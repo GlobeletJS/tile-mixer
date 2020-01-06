@@ -1176,22 +1176,21 @@ function xhrGet(href, type, callback) {
 }
 
 const tasks = {};
+var filter = (data) => data;
 
 onmessage = function(msgEvent) {
   // The message DATA as sent by the parent thread is now a property 
   // of the message EVENT. See
   // https://developer.mozilla.org/en-US/docs/Web/API/MessageEvent
   const { id, type, payload } = msgEvent.data;
-  var filter = (data) => data;
 
   switch (type) {
     case "styles":
-      filter = initSourceFilter(styles);
+      // NOTE: changing global variable!
+      filter = initSourceFilter(payload);
       break;
     case "start":
-      // TODO: this is a bit messy
-      let zoom = payload.zoom;
-      let callback = (err, result) => sendHeader(id, err, result, filter, zoom);
+      let callback = (err, result) => sendHeader(id, err, result, payload.zoom);
       let request  = readMVT(payload.href, payload.size, callback);
       tasks[id] = { request, status: "requested" };
       break;
@@ -1207,7 +1206,7 @@ onmessage = function(msgEvent) {
   }
 };
 
-function sendHeader(id, err, result, filter, zoom) {
+function sendHeader(id, err, result, zoom) {
   // Make sure we still have an active task for this ID
   let task = tasks[id];
   if (!task) return;  // Task must have been canceled

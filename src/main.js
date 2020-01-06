@@ -21,7 +21,7 @@ export function initTileMixer(params) {
   const getURL = initUrlFunc(source.tiles);
 
   // Initialize workers
-  const workers = initWorkers(nThreads, "./worker.bundle.js", styles);
+  const workers = initWorkers(nThreads, "./worker.bundle.js", layers);
 
   // Define request function
   function request(z, x, y, callback) {
