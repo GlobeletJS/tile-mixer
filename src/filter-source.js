@@ -1,4 +1,6 @@
 import { buildFeatureFilter } from "./filter-feature.js";
+import { initFeatureGrouper } from "./group-features.js";
+import { initLabelParser    } from "./parse-labels.js";
 
 export function initSourceFilter(styles) {
   // Make an [ID, getter] pair for each layer
@@ -20,6 +22,9 @@ function makeLayerFilter(style) {
 
   const sourceLayer = style["source-layer"];
   const filter = buildFeatureFilter(style.filter);
+  const compress = (style.type === "symbol")
+    ? initLabelParser(style)
+    : initFeatureGrouper(style);
 
   return function(source, zoom) {
     // source is a dictionary of FeatureCollections, keyed on source-layer
@@ -32,6 +37,9 @@ function makeLayerFilter(style) {
     let features = layer.features.filter(filter);
     if (features.length < 1) return false;
 
-    return { type: "FeatureCollection", features };
+    let compressed = compress(features, zoom);
+
+    // TODO: Also return raw features if layer is meant to be interactive
+    return { type: "FeatureCollection", features: compressed };
   };
 }

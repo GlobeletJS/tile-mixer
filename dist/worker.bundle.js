@@ -76,6 +76,162 @@ function initFeatureValGetter(key) {
   }
 }
 
+function initFeatureGrouper(style) {
+  // Find the names of the feature properties that affect rendering
+  const renderProps = Object.values(style.layout)
+    .concat(Object.values(style.paint))
+    .filter(styleFunc => styleFunc.type === "property")
+    .map(styleFunc => styleFunc.property);
+
+  // Return a function to group features that will be styled the same
+  return (renderProps.length > 0)
+    ? (features) => groupFeatures(features, trimProps)
+    : combineFeatures;
+
+  function trimProps(properties) {
+    let trimmed = {};
+    renderProps.forEach(key => {
+      trimmed[key] = properties[key];
+    });
+    return trimmed;
+  }
+}
+
+function groupFeatures(features, selectProperties) {
+  // Group features that will be styled the same
+  const groups = {};
+  features.forEach(feature => {
+    // Keep only the properties relevant to rendering
+    let properties = selectProperties(feature.properties);
+
+    // Look up the appropriate group, or create it if it doesn't exist
+    let key = Object.entries(properties).join();
+    if (!groups[key]) groups[key] = initFeature(feature, properties);
+
+    // Add this feature's coordinates to the grouped feature
+    addCoords(groups[key].geometry.coordinates, feature.geometry);
+  });
+
+  return Object.values(groups).map(checkType);
+}
+
+function combineFeatures(features) {
+  // No feature-dependent styles -- combine all features into one
+  var group = initFeature(features[0]);
+  features.forEach(f => addCoords(group.geometry.coordinates, f.geometry));
+  return [ checkType(group) ];
+}
+
+function initFeature(template, properties) {
+  var type = template.geometry.type;
+  return {
+    type: "Feature",
+    geometry: { type, coordinates: [] },
+    properties: properties,
+  };
+}
+
+function addCoords(coords, geom) {
+  if (geom.type.substring(0, 5) === "Multi") {
+    geom.coordinates.forEach(coord => coords.push(coord));
+  } else {
+    coords.push(geom.coordinates);
+  }
+}
+
+function checkType(feature) {
+  // Check if we have a Multi-* geometry, and make sure it is labeled correctly
+  let geom = feature.geometry;
+  let labeledMulti = geom.type.substring(0, 5) === "Multi";
+
+  if (geom.coordinates.length < 2) {  // Not Multi
+    geom.coordinates = geom.coordinates[0];
+    if (labeledMulti) geom.type = geom.type.substring(5);
+
+  } else if (!labeledMulti) {
+    geom.type = "Multi" + geom.type;
+  }
+
+  return feature;
+}
+
+function getTokenParser(tokenText) {
+  if (!tokenText) return () => undefined;
+  const tokenPattern = /{([^{}]+)}/g;
+
+  // We break tokenText into pieces that are either plain text or tokens,
+  // then construct an array of functions to parse each piece
+  var tokenFuncs = [];
+  var charIndex  = 0;
+  while (charIndex < tokenText.length) {
+    // Find the next token
+    let result = tokenPattern.exec(tokenText);
+
+    if (!result) {
+      // No tokens left. Parse the plain text after the last token
+      let str = tokenText.substring(charIndex);
+      tokenFuncs.push(props => str);
+      break;
+    } else if (result.index > charIndex) {
+      // There is some plain text before the token
+      let str = tokenText.substring(charIndex, result.index);
+      tokenFuncs.push(props => str);
+    }
+
+    // Add a function to process the current token
+    let token = result[1];
+    tokenFuncs.push(props => props[token]);
+    charIndex = tokenPattern.lastIndex;
+  }
+  
+  // We now have an array of functions returning either a text string or
+  // a feature property
+  // Return a function that assembles everything
+  return function(properties) {
+    return tokenFuncs.reduce(concat, "");
+    function concat(str, tokenFunc) {
+      let text = tokenFunc(properties) || "";
+      return str += text;
+    }
+  };
+}
+
+function initLabelParser(style) {
+  const layout = style.layout;
+
+  // Return a function to compute label text and sprite ID
+  return function(features, zoom) {
+    const getSpriteID = getTokenParser( layout["icon-image"](zoom) );
+    const parseText = getTokenParser( layout["text-field"](zoom) );
+    const transformText = getTextTransform( layout["text-transform"](zoom) );
+
+    function getProps(properties) {
+      var spriteID = getSpriteID(properties);
+      var labelText = parseText(properties);
+      if (labelText) labelText = transformText(labelText);
+      return { spriteID, labelText };
+    }
+
+    return features.map( f => initLabel(f.geometry, getProps(f.properties)) );
+  }
+}
+
+function initLabel(geometry, properties) {
+  return { type: "Feature", geometry, properties };
+}
+
+function getTextTransform(code) {
+  switch (code) {
+    case "uppercase":
+      return f => f.toUpperCase();
+    case "lowercase":
+      return f => f.toLowerCase();
+    case "none":
+    default:
+      return f => f;
+  }
+}
+
 function initSourceFilter(styles) {
   // Make an [ID, getter] pair for each layer
   const filters = styles.map(style => [style.id, makeLayerFilter(style)]);
@@ -96,6 +252,9 @@ function makeLayerFilter(style) {
 
   const sourceLayer = style["source-layer"];
   const filter = buildFeatureFilter(style.filter);
+  const compress = (style.type === "symbol")
+    ? initLabelParser(style)
+    : initFeatureGrouper(style);
 
   return function(source, zoom) {
     // source is a dictionary of FeatureCollections, keyed on source-layer
@@ -108,7 +267,10 @@ function makeLayerFilter(style) {
     let features = layer.features.filter(filter);
     if (features.length < 1) return false;
 
-    return { type: "FeatureCollection", features };
+    let compressed = compress(features, zoom);
+
+    // TODO: Also return raw features if layer is meant to be interactive
+    return { type: "FeatureCollection", features: compressed };
   };
 }
 
