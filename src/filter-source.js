@@ -1,10 +1,12 @@
-import { buildFeatureFilter } from "./filter-feature.js";
+//import { buildFeatureFilter } from "./filter-feature.js";
+import { parseLayer         } from 'tile-stencil';
 import { initFeatureGrouper } from "./group-features.js";
 import { initLabelParser    } from "./parse-labels.js";
 
 export function initSourceFilter(styles) {
   // Make an [ID, getter] pair for each layer
-  const filters = styles.map(style => [style.id, makeLayerFilter(style)]);
+  const filters = styles.map(parseLayer)
+    .map(style => [style.id, makeLayerFilter(style)]);
 
   return function(source, zoom) {
     const filtered = {};
@@ -21,7 +23,8 @@ function makeLayerFilter(style) {
   const maxzoom = style.maxzoom || 99; // NOTE: doesn't allow maxzoom = 0
 
   const sourceLayer = style["source-layer"];
-  const filter = buildFeatureFilter(style.filter);
+  //const filter = buildFeatureFilter(style.filter);
+  const filter = style.filter;
   const compress = (style.type === "symbol")
     ? initLabelParser(style)
     : initFeatureGrouper(style);
