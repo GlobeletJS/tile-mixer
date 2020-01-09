@@ -55,8 +55,9 @@ function initWorkers(nThreads, codeHref, styles) {
         task.result = initJSON(msg.payload);
         return this.postMessage({ id: msg.id, type: "continue" });
 
-      case "data": 
-        let features = task.result[msg.key].features;
+      case "compressed":
+      case "features":
+        let features = task.result[msg.key][msg.type];
         msg.payload.forEach( feature => features.push(feature) );
         return this.postMessage({ id: msg.id, type: "continue" });
 
@@ -88,18 +89,29 @@ function getIdleWorkerID(workLoads) {
 function initJSON(header) {
   const json = {};
   Object.keys(header).forEach(key => {
-    json[key] = { type: "FeatureCollection", features: [] };
+    json[key] = { type: "FeatureCollection", compressed: [] };
+    if (header.features) json[key].features = [];
   });
   return json;
 }
 
 function checkJSON(json, header) {
-  return Object.keys(header).every(k => json[k].features.length === header[k]);
+  return Object.keys(header).every(k => {
+    // Check default array of compressed features
+    var ok = json[k].compressed.length === header[k].compressed;
+
+    if (header[k].features) {
+      // We also have raw GeoJSON for querying. Check the length
+      ok = ok && json[k].features.length === header[k].features;
+    }
+    return ok;
+  });
 }
 
 const vectorTypes = ["symbol", "circle", "line", "fill"];
 
 function initTileMixer(params) {
+  // TODO: move parameter checks out?
   const nThreads = params.threads || 2;
 
   // Confirm supplied styles are all vector layers reading from the same source
@@ -120,13 +132,19 @@ function initTileMixer(params) {
   // Initialize workers
   const workers = initWorkers(nThreads, "./worker.bundle.js", layers);
 
-  // Define request function
+  // Initialize chunked queue, OR input it?
+  // What about prioritization? TODO
+  // Initialize prerenderer
+  //const preRenderer = initPreRenderer(layers);
+
+  // Define request function  TODO: Wrap callback with pre-renderer
   function request(z, x, y, callback) {
     const url = getURL(z, x, y);
     const payload = { href: url, size: 512, zoom: z };
     return workers.startTask(payload, callback);
   }
 
+  // Returned API  TODO: Extend canceler to stop prerendering
   return {
     request,
     cancelTask: (id) => workers.cancelTask(id),

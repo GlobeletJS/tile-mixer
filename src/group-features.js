@@ -47,7 +47,7 @@ function combineFeatures(features) {
 function initFeature(template, properties) {
   var type = template.geometry.type;
   return {
-    type: "Feature",
+    //type: "Feature", // Required by GeoJSON, but not needed for rendering
     geometry: { type, coordinates: [] },
     properties: properties,
   };

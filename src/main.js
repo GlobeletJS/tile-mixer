@@ -1,8 +1,10 @@
 import { initWorkers } from "./boss.js";
+import { initPreRenderer } from "./prerender.js";
 
 const vectorTypes = ["symbol", "circle", "line", "fill"];
 
 export function initTileMixer(params) {
+  // TODO: move parameter checks out?
   const nThreads = params.threads || 2;
 
   // Confirm supplied styles are all vector layers reading from the same source
@@ -23,13 +25,19 @@ export function initTileMixer(params) {
   // Initialize workers
   const workers = initWorkers(nThreads, "./worker.bundle.js", layers);
 
-  // Define request function
+  // Initialize chunked queue, OR input it?
+  // What about prioritization? TODO
+  // Initialize prerenderer
+  //const preRenderer = initPreRenderer(layers);
+
+  // Define request function  TODO: Wrap callback with pre-renderer
   function request(z, x, y, callback) {
     const url = getURL(z, x, y);
     const payload = { href: url, size: 512, zoom: z };
     return workers.startTask(payload, callback);
   }
 
+  // Returned API  TODO: Extend canceler to stop prerendering
   return {
     request,
     cancelTask: (id) => workers.cancelTask(id),

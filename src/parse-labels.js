@@ -21,7 +21,11 @@ export function initLabelParser(style) {
 }
 
 function initLabel(geometry, properties) {
-  return { type: "Feature", geometry, properties };
+  return {
+    //type: "Feature",  // Required by GeoJSON, but not needed for rendering
+    geometry,
+    properties,
+  };
 }
 
 function getTextTransform(code) {

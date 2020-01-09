@@ -1,4 +1,3 @@
-//import { buildFeatureFilter } from "./filter-feature.js";
 import { parseLayer         } from 'tile-stencil';
 import { initFeatureGrouper } from "./group-features.js";
 import { initLabelParser    } from "./parse-labels.js";
@@ -28,6 +27,7 @@ function makeLayerFilter(style) {
   const compress = (style.type === "symbol")
     ? initLabelParser(style)
     : initFeatureGrouper(style);
+  const interactive = style.interactive;
 
   return function(source, zoom) {
     // source is a dictionary of FeatureCollections, keyed on source-layer
@@ -42,7 +42,9 @@ function makeLayerFilter(style) {
 
     let compressed = compress(features, zoom);
 
-    // TODO: Also return raw features if layer is meant to be interactive
-    return { type: "FeatureCollection", features: compressed };
+    let collection = { type: "FeatureCollection", compressed };
+    if (interactive) collection.features = features;
+
+    return collection;
   };
 }

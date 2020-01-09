@@ -55,8 +55,9 @@ export function initWorkers(nThreads, codeHref, styles) {
         task.result = initJSON(msg.payload);
         return this.postMessage({ id: msg.id, type: "continue" });
 
-      case "data": 
-        let features = task.result[msg.key].features;
+      case "compressed":
+      case "features":
+        let features = task.result[msg.key][msg.type];
         msg.payload.forEach( feature => features.push(feature) );
         return this.postMessage({ id: msg.id, type: "continue" });
 
@@ -88,11 +89,21 @@ function getIdleWorkerID(workLoads) {
 function initJSON(header) {
   const json = {};
   Object.keys(header).forEach(key => {
-    json[key] = { type: "FeatureCollection", features: [] };
+    json[key] = { type: "FeatureCollection", compressed: [] };
+    if (header.features) json[key].features = [];
   });
   return json;
 }
 
 function checkJSON(json, header) {
-  return Object.keys(header).every(k => json[k].features.length === header[k]);
+  return Object.keys(header).every(k => {
+    // Check default array of compressed features
+    var ok = json[k].compressed.length === header[k].compressed;
+
+    if (header[k].features) {
+      // We also have raw GeoJSON for querying. Check the length
+      ok = ok && json[k].features.length === header[k].features;
+    }
+    return ok;
+  });
 }

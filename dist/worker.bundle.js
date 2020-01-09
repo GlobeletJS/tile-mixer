@@ -640,7 +640,7 @@ function combineFeatures(features) {
 function initFeature(template, properties) {
   var type = template.geometry.type;
   return {
-    type: "Feature",
+    //type: "Feature", // Required by GeoJSON, but not needed for rendering
     geometry: { type, coordinates: [] },
     properties: properties,
   };
@@ -732,7 +732,11 @@ function initLabelParser(style) {
 }
 
 function initLabel(geometry, properties) {
-  return { type: "Feature", geometry, properties };
+  return {
+    //type: "Feature",  // Required by GeoJSON, but not needed for rendering
+    geometry,
+    properties,
+  };
 }
 
 function getTextTransform(code) {
@@ -746,8 +750,6 @@ function getTextTransform(code) {
       return f => f;
   }
 }
-
-//import { buildFeatureFilter } from "./filter-feature.js";
 
 function initSourceFilter(styles) {
   // Make an [ID, getter] pair for each layer
@@ -774,6 +776,7 @@ function makeLayerFilter(style) {
   const compress = (style.type === "symbol")
     ? initLabelParser(style)
     : initFeatureGrouper(style);
+  const interactive = style.interactive;
 
   return function(source, zoom) {
     // source is a dictionary of FeatureCollections, keyed on source-layer
@@ -788,8 +791,10 @@ function makeLayerFilter(style) {
 
     let compressed = compress(features, zoom);
 
-    // TODO: Also return raw features if layer is meant to be interactive
-    return { type: "FeatureCollection", features: compressed };
+    let collection = { type: "FeatureCollection", compressed };
+    if (interactive) collection.features = features;
+
+    return collection;
   };
 }
 
@@ -1904,7 +1909,12 @@ function sendHeader(id, err, result, zoom) {
 
   // Send a header with info about each layer
   const header = {};
-  task.layers.forEach(key => { header[key] = result[key].features.length; });
+  task.layers.forEach(key => {
+    let data = result[key];
+    let counts = { compressed: data.compressed.length };
+    if (data.features) counts.features = data.features.length;
+    header[key] = counts;
+  });
   postMessage({ id, type: "header", payload: header });
 }
 
@@ -1915,7 +1925,8 @@ function sendData(id) {
 
   var currentLayer = task.result[task.layers[0]];
   // Make sure we still have data in this layer
-  if (currentLayer && currentLayer.features.length == 0) {
+  var dataType = findRemainingData(currentLayer);
+  if (!dataType) {
     task.layers.shift();           // Discard this layer
     currentLayer = task.result[task.layers[0]];
   }
@@ -1926,12 +1937,23 @@ function sendData(id) {
   }
 
   // Get the next chunk of data and send it back to the main thread
-  let chunk = getChunk(currentLayer.features);
-  postMessage({ id, type: "data", key: task.layers[0], payload: chunk });
+  var chunk = getChunk(currentLayer[dataType]);
+  postMessage({ id, type: dataType, key: task.layers[0], payload: chunk });
+}
+
+function findRemainingData(layer) {
+  if (!layer) return false;
+  // All layers have a 'compressed' array
+  if (layer.compressed.length > 0) return "compressed";
+  // 'compressed' array is empty. There might still be a 'features' array
+  if (layer.features && layer.features.length > 0) return "features";
+  return false;
 }
 
 function getChunk(arr) {
-  const maxChunk = 100000; // 100 KB
+  // Limit to 100 KB per postMessage. TODO: Consider 10KB for cheap phones? 
+  // See https://dassur.ma/things/is-postmessage-slow/
+  const maxChunk = 100000; 
 
   let chunk = [];
   let chunkSize = 0;
