@@ -66,10 +66,11 @@ function sendData(id) {
 
   var currentLayer = task.result[task.layers[0]];
   // Make sure we still have data in this layer
-  var dataType = findRemainingData(currentLayer);
-  if (!dataType) {
+  var dataType = getDataType(currentLayer);
+  if (dataType === "none") {
     task.layers.shift();           // Discard this layer
     currentLayer = task.result[task.layers[0]];
+    dataType = getDataType(currentLayer);
   }
   if (task.layers.length == 0) {
     delete tasks[id];
@@ -82,13 +83,13 @@ function sendData(id) {
   postMessage({ id, type: dataType, key: task.layers[0], payload: chunk });
 }
 
-function findRemainingData(layer) {
-  if (!layer) return false;
+function getDataType(layer) {
+  if (!layer) return "none";
   // All layers have a 'compressed' array
   if (layer.compressed.length > 0) return "compressed";
   // 'compressed' array is empty. There might still be a 'features' array
   if (layer.features && layer.features.length > 0) return "features";
-  return false;
+  return "none";
 }
 
 function getChunk(arr) {

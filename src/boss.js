@@ -1,5 +1,4 @@
 export function initWorkers(nThreads, codeHref, styles) {
-
   const tasks = {};
   var globalMsgId = 0;
 
@@ -62,9 +61,7 @@ export function initWorkers(nThreads, codeHref, styles) {
         return this.postMessage({ id: msg.id, type: "continue" });
 
       case "done":
-        let err = checkJSON(task.result, task.header)
-          ? null
-          : "ERROR: JSON from worker failed checks!";
+        let err = checkResult(task.result, task.header);
         task.callback(err, task.result);
         break; // Clean up below
 
@@ -95,15 +92,21 @@ function initJSON(header) {
   return json;
 }
 
-function checkJSON(json, header) {
-  return Object.keys(header).every(k => {
-    // Check default array of compressed features
-    var ok = json[k].compressed.length === header[k].compressed;
+function checkResult(json, header) {
+  let allOk = Object.keys(header)
+    .every( k => checkData(json[k], header[k]) );
 
-    if (header[k].features) {
-      // We also have raw GeoJSON for querying. Check the length
-      ok = ok && json[k].features.length === header[k].features;
-    }
-    return ok;
-  });
+  return allOk
+    ? null
+    : "ERROR: JSON from worker failed checks!";
+}
+
+function checkData(data, counts) {
+  // data is a GeoJSON Feature Collection, augmented with 'compressed' array
+  var ok = data.compressed.length === counts.compressed;
+  if (counts.features) {
+    // We also have raw GeoJSON for querying. Check the length
+    ok = ok && data.features.length === counts.features;
+  }
+  return ok;
 }
