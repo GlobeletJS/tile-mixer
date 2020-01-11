@@ -13,7 +13,7 @@ export default [{
     name: pkg.name,
   }
 }, {
-  input: 'src/worker.js',
+  input: 'src/worker/worker.js',
   plugins: [
     resolve(),
     commonjs(),

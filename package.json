@@ -37,6 +37,7 @@
   "dependencies": {
     "pbf": "^3.2.1",
     "tile-stencil": "^0.2.0",
-    "vector-tile-esm": "^2.1.0"
+    "vector-tile-esm": "^2.1.0",
+    "zero-timeout": "0.0.2"
   }
 }

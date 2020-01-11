@@ -1,6 +1,6 @@
 import { parseLayer         } from 'tile-stencil';
 import { initFeatureGrouper } from "./group-features.js";
-import { initLabelParser    } from "./parse-labels.js";
+import { initLabelParser, getFont } from "./parse-labels.js";
 
 export function initSourceFilter(styles) {
   // Make an [ID, getter] pair for each layer
@@ -24,10 +24,13 @@ function makeLayerFilter(style) {
   const sourceLayer = style["source-layer"];
   //const filter = buildFeatureFilter(style.filter);
   const filter = style.filter;
-  const compress = (style.type === "symbol")
+  const layout = style.layout;
+  const interactive = style.interactive;
+
+  const isLabel = style.type === "symbol";
+  const compress = (isLabel)
     ? initLabelParser(style)
     : initFeatureGrouper(style);
-  const interactive = style.interactive;
 
   return function(source, zoom) {
     // source is a dictionary of FeatureCollections, keyed on source-layer
@@ -44,6 +47,7 @@ function makeLayerFilter(style) {
 
     let collection = { type: "FeatureCollection", compressed };
     if (interactive) collection.features = features;
+    if (isLabel) collection.properties = { font: getFont(layout, zoom) };
 
     return collection;
   };

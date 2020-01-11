@@ -1,11 +1,6 @@
-import { getStyleFuncs } from 'tile-stencil';
-import { getFontString } from "./font.js";
 import { geomToPath } from "./path.js";
 
-export function initDataPrep(rawStyles) {
-  // Parse the style functions
-  const styles = rawStyles.map(getStyleFuncs);
-
+export function initDataPrep(styles) {
   // Build a dictionary of data prep functions, keyed on style.id
   const prepFunctions = {};
   styles.forEach(style => {
@@ -24,17 +19,9 @@ export function initDataPrep(rawStyles) {
 function initTextMeasurer(style) {
   // TODO: This closure only saves one createElement call. Is it worth it?
   const ctx = document.createElement("canvas").getContext("2d");
-  const layout = style.layout;
 
   return function(data, zoom) {
-    const fontSize = layout["text-size"](zoom);
-    const fontFace = layout["text-font"](zoom);
-    const lineHeight = layout["text-line-height"](zoom);
-    const font = getFontString(fontFace, fontSize, lineHeight);
-
-    if (!data.properties) data.properties = {};
-    data.properties.font = font;
-    ctx.font = font;
+    ctx.font = data.properties.font;
 
     data.compressed.forEach(feature => {
       let labelText = feature.properties.labelText;

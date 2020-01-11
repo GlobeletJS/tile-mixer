@@ -1,3 +1,5 @@
+import { initChunkQueue } from "./queue.js";
+
 const vectorTypes = ["symbol", "circle", "line", "fill"];
 
 export function setParams(userParams) {
@@ -17,10 +19,16 @@ export function setParams(userParams) {
   if (!userParams.source) fail("parameters.source is required!");
   const getURL = initUrlFunc(userParams.source.tiles);
 
+  // Construct the task queue, if not supplied
+  const queue = (userParams.queue)
+    ? userParams.queue
+    : initChunkQueue();
+
   return {
     threads,
     layers,
-    getURL
+    getURL,
+    queue
   };
 }
 

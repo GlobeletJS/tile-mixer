@@ -83,11 +83,12 @@ function getIdleWorkerID(workLoads) {
   return id;
 }
 
-function initJSON(header) {
+function initJSON(headers) {
   const json = {};
-  Object.keys(header).forEach(key => {
+  Object.entries(headers).forEach( ([key, hdr]) => {
     json[key] = { type: "FeatureCollection", compressed: [] };
-    if (header.features) json[key].features = [];
+    if (hdr.features) json[key].features = [];
+    if (hdr.properties) json[key].properties = hdr.properties;
   });
   return json;
 }

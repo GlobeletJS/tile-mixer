@@ -1,4 +1,5 @@
 import { getTokenParser } from "./tokens.js";
+import { getFontString  } from "./font.js";
 
 export function initLabelParser(style) {
   const layout = style.layout;
@@ -38,4 +39,11 @@ function getTextTransform(code) {
     default:
       return f => f;
   }
+}
+
+export function getFont(layout, zoom) {
+  let fontSize = layout["text-size"](zoom);                                                           let fontFace = layout["text-font"](zoom);
+  let lineHeight = layout["text-line-height"](zoom);
+
+  return getFontString(fontFace, fontSize, lineHeight);
 }

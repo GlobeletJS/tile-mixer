@@ -49,14 +49,15 @@ function sendHeader(id, err, result, zoom) {
   task.status = "parsed";
 
   // Send a header with info about each layer
-  const header = {};
+  const headers = {};
   task.layers.forEach(key => {
     let data = result[key];
-    let counts = { compressed: data.compressed.length };
-    if (data.features) counts.features = data.features.length;
-    header[key] = counts;
+    let header = { compressed: data.compressed.length };
+    if (data.features) header.features = data.features.length;
+    if (data.properties) header.properties = data.properties;
+    headers[key] = header;
   });
-  postMessage({ id, type: "header", payload: header });
+  postMessage({ id, type: "header", payload: headers });
 }
 
 function sendData(id) {
