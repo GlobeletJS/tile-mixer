@@ -1,4 +1,4 @@
-import { initChunkQueue } from "./queue.js";
+import * as chunkedQueue from 'chunked-queue';
 
 const vectorTypes = ["symbol", "circle", "line", "fill"];
 
@@ -22,7 +22,7 @@ export function setParams(userParams) {
   // Construct the task queue, if not supplied
   const queue = (userParams.queue)
     ? userParams.queue
-    : initChunkQueue();
+    : chunkedQueue.init();
 
   return {
     threads,

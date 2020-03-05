@@ -37,7 +37,7 @@ function initZeroTimeouts() {
   };
 }
 
-function initChunkQueue() {
+function init() {
   const tasks = [];
   var taskId = 0;
   var queueIsRunning = false;
@@ -114,7 +114,7 @@ function setParams(userParams) {
   // Construct the task queue, if not supplied
   const queue = (userParams.queue)
     ? userParams.queue
-    : initChunkQueue();
+    : init();
 
   return {
     threads,
