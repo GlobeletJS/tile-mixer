@@ -1,13 +1,15 @@
 import { setParams } from "./params.js";
 import { initWorkers } from "./boss.js";
 import { initDataPrep } from "./data-prep.js";
-const workerPath = "./worker.bundle.js";
+import workerCode from "../build/worker.bundle.js";
 
 export function initTileMixer(userParams) {
   const params = setParams(userParams);
   const queue = params.queue;
 
   // Initialize workers and data prep function getter
+  const workerBlob = new Blob([workerCode]);
+  const workerPath = URL.createObjectURL(workerBlob);
   const workers = initWorkers(params.threads, workerPath, params.layers);
   const getPrepFuncs = initDataPrep(params.layers);
 

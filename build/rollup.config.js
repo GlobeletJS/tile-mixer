@@ -1,25 +1,27 @@
 import resolve from 'rollup-plugin-node-resolve';
 import commonjs from 'rollup-plugin-commonjs'; // Needed for pbf module
+import { worker } from "./worker-plugin.js";
 import pkg from "../package.json";
 
 export default [{
-  input: 'src/main.js',
-  plugins: [
-    resolve(),
-  ],
-  output: {
-    file: pkg.main,
-    format: 'esm',
-    name: pkg.name,
-  }
-}, {
   input: 'src/worker/worker.js',
   plugins: [
     resolve(),
     commonjs(),
   ],
   output: {
-    file: 'dist/worker.bundle.js',
+    file: 'build/worker.bundle.js',
+    format: 'esm',
+    name: pkg.name,
+  }
+}, {
+  input: 'src/main.js',
+  plugins: [
+    resolve(),
+    worker(),
+  ],
+  output: {
+    file: pkg.main,
     format: 'esm',
     name: pkg.name,
   }
