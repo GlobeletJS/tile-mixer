@@ -2485,13 +2485,15 @@ function initTileMixer(userParams) {
       const chunks = getPrepFuncs(source, z);
       chunks.push( () => callback(null, source) );
 
+      const prepTaskId = queue.enqueueTask({ getPriority, chunks });
+
       if (params.verbose) {
         console.log("tile-mixer: " + 
-          "tile ID = " + [z, x, y].join("/") + ", " +
-          "chunks.length = " + chunks.length);
+          "tileID " + [z, x, y].join("/") + ", " +
+          "chunks.length = " + chunks.length) + ", " +
+          "prepTaskId = " + prepTaskId;
       }
 
-      const prepTaskId = queue.enqueueTask({ getPriority, chunks });
       reqHandle.abort = () => queue.cancelTask(prepTaskId);
     }
 
