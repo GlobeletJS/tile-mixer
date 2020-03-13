@@ -2490,8 +2490,9 @@ function initTileMixer(userParams) {
       if (params.verbose) {
         console.log("tile-mixer: " + 
           "tileID " + [z, x, y].join("/") + ", " +
-          "chunks.length = " + chunks.length) + ", " +
-          "prepTaskId = " + prepTaskId;
+          "chunks.length = " + chunks.length + ", " +
+          "prepTaskId = " + prepTaskId
+        );
       }
 
       reqHandle.abort = () => queue.cancelTask(prepTaskId);
