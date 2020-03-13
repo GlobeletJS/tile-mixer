@@ -1,6 +1,6 @@
 export function initWorkers(nThreads, codeHref, styles) {
   const tasks = {};
-  var globalMsgId = 0;
+  var msgId = 0;
 
   // Initialize the worker threads, and send them the styles
   function trainWorker() {
@@ -21,9 +21,9 @@ export function initWorkers(nThreads, codeHref, styles) {
 
   function startTask(payload, callback) {
     let workerID = getIdleWorkerID(workLoads);
-    workLoads[workerID] ++;
+    workLoads[workerID] += 1;
 
-    const msgId = ++globalMsgId; // Start from 1, since we used 0 for styles
+    msgId += 1;
     tasks[msgId] = { callback, workerID };
     workers[workerID].postMessage({ id: msgId, type: "start", payload });
 
@@ -34,7 +34,7 @@ export function initWorkers(nThreads, codeHref, styles) {
     let task = tasks[id];
     if (!task) return;
     workers[task.workerID].postMessage({ id, type: "cancel" });
-    workLoads[task.workerID] --;
+    workLoads[task.workerID] -= 1;
     delete tasks[id];
   }
 
@@ -70,7 +70,7 @@ export function initWorkers(nThreads, codeHref, styles) {
         break; // Clean up below
     }
 
-    workLoads[task.workerID] --;
+    workLoads[task.workerID] -= 1;
     delete tasks[msg.id];
   }
 }

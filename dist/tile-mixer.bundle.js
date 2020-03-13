@@ -26,7 +26,8 @@ function initZeroTimeouts() {
 
   // Now define the external functions to set or cancel a timeout
   window.setZeroTimeout = function(func, ...args) {
-    timeouts.push({ id: taskId++, func, args });
+    taskId += 1;
+    timeouts.push({ id: taskId, func, args });
     window.postMessage(messageKey, targetOrigin);
     return taskId;
   };
@@ -50,9 +51,10 @@ function init() {
   };
 
   function enqueueTask(newTask) {
-    let defaultPriority = () => 0;
+    const defaultPriority = () => 0;
+    taskId += 1;
     tasks.push({ 
-      id: taskId++,
+      id: taskId,
       getPriority: newTask.getPriority || defaultPriority,
       chunks: newTask.chunks,
     });
@@ -148,7 +150,7 @@ function fail(message) {
 
 function initWorkers(nThreads, codeHref, styles) {
   const tasks = {};
-  var globalMsgId = 0;
+  var msgId = 0;
 
   // Initialize the worker threads, and send them the styles
   function trainWorker() {
@@ -169,9 +171,9 @@ function initWorkers(nThreads, codeHref, styles) {
 
   function startTask(payload, callback) {
     let workerID = getIdleWorkerID(workLoads);
-    workLoads[workerID] ++;
+    workLoads[workerID] += 1;
 
-    const msgId = ++globalMsgId; // Start from 1, since we used 0 for styles
+    msgId += 1;
     tasks[msgId] = { callback, workerID };
     workers[workerID].postMessage({ id: msgId, type: "start", payload });
 
@@ -182,7 +184,7 @@ function initWorkers(nThreads, codeHref, styles) {
     let task = tasks[id];
     if (!task) return;
     workers[task.workerID].postMessage({ id, type: "cancel" });
-    workLoads[task.workerID] --;
+    workLoads[task.workerID] -= 1;
     delete tasks[id];
   }
 
@@ -218,7 +220,7 @@ function initWorkers(nThreads, codeHref, styles) {
         break; // Clean up below
     }
 
-    workLoads[task.workerID] --;
+    workLoads[task.workerID] -= 1;
     delete tasks[msg.id];
   }
 }
