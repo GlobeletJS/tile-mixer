@@ -24,11 +24,15 @@ export function setParams(userParams) {
     ? userParams.queue
     : chunkedQueue.init();
 
+  // Check if this is a debugging run
+  const verbose = (userParams.verbose === true) ? true : false;
+
   return {
     threads,
     layers,
     getURL,
-    queue
+    queue,
+    verbose,
   };
 }
 

@@ -7,10 +7,11 @@ export function initTileMixer(userParams) {
   const params = setParams(userParams);
   const queue = params.queue;
 
-  // Initialize workers and data prep function getter
-  const workerBlob = new Blob([workerCode]);
-  const workerPath = URL.createObjectURL(workerBlob);
+  // Initialize workers
+  const workerPath = URL.createObjectURL( new Blob([workerCode]) );
   const workers = initWorkers(params.threads, workerPath, params.layers);
+  URL.revokeObjectURL(workerPath);
+
   const getPrepFuncs = initDataPrep(params.layers);
 
   // Define request function
@@ -31,6 +32,12 @@ export function initTileMixer(userParams) {
       const chunks = getPrepFuncs(source, z);
       chunks.push( () => callback(null, source) );
 
+      if (params.verbose) {
+        console.log("tile-mixer: " + 
+          "tile ID = " + [z, x, y].join("/") + ", " +
+          "chunks.length = " + chunks.length);
+      }
+
       const prepTaskId = queue.enqueueTask({ getPriority, chunks });
       reqHandle.abort = () => queue.cancelTask(prepTaskId);
     }
@@ -41,7 +48,9 @@ export function initTileMixer(userParams) {
   // Return API
   return {
     request,
-    activeTasks: () => workers.activeTasks(),
+    activeTasks: () => workers.activeTasks() + queue.countTasks(),
+    workerTasks: () => workers.activeTasks(),
+    queuedTasks: () => queue.countTasks(),
     terminate: () => workers.terminate(),
   };
 }

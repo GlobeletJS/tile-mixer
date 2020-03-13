@@ -75,6 +75,7 @@ The supplied parameters object has the following properties
   use data from the specified source. REQUIRED
 - `queue`: an instance of [chunked-queue] to use for managing long-running
   tasks. If not supplied, tile-mixer will initialize its own queue
+- `verbose`: if true, tile-mixer will print debug info to the console
 
 [Web Workers]: https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API
 [source]: https://docs.mapbox.com/mapbox-gl-js/style-spec/#sources
@@ -90,4 +91,6 @@ Initialization returns an object with the following methods:
 - `.cancel(taskID)`: Cancels any active HTTP requests or processing tasks
   associated with the supplied integer ID
 - `.activeTasks()`: Returns the (integer) number of active tasks
+- `.workerTasks()`: Returns the number of tasks active on worker threads
+- `.queuedTasks()`: Returns the number of tasks queued on the main thread
 - `.terminate()`: Cancels all tasks and terminates the Web Workers
