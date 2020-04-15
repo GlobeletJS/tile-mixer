@@ -39,6 +39,7 @@ For style layers with type `circle`, `line`, or `fill`, each feature in the
 `compressed` array will have the following properties:
   - `properties`: The feature properties that affect styling.
   - `path`: A [Path2D] object corresponding to the geometry of the feature
+
 Path coordinates are scaled from the vector tile's `.extent` to the desired
 pixel size of the rendered tile. (CURRENTLY HARD-CODED TO 512).
 Layers of type `circle` have a path of the form `M x y L x y` (in SVG notation)

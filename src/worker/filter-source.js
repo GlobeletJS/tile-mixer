@@ -1,10 +1,11 @@
-import { parseLayer         } from 'tile-stencil';
+import { getStyleFuncs      } from 'tile-stencil';
+import { buildFeatureFilter } from "./filter-feature.js";
 import { initFeatureGrouper } from "./group-features.js";
 import { initLabelParser, getFont } from "./parse-labels.js";
 
 export function initSourceFilter(styles) {
   // Make an [ID, getter] pair for each layer
-  const filters = styles.map(parseLayer)
+  const filters = styles.map(getStyleFuncs)
     .map(style => [style.id, makeLayerFilter(style)]);
 
   return function(source, zoom) {
@@ -18,24 +19,20 @@ export function initSourceFilter(styles) {
 }
 
 function makeLayerFilter(style) {
-  const minzoom = style.minzoom || 0;
-  const maxzoom = style.maxzoom || 99; // NOTE: doesn't allow maxzoom = 0
+  const { type, layout, interactive, minzoom = 0, maxzoom = 99 } = style;
 
   const sourceLayer = style["source-layer"];
-  //const filter = buildFeatureFilter(style.filter);
-  const filter = style.filter;
-  const layout = style.layout;
-  const interactive = style.interactive;
+  const filterObject = composeFilters(getGeomFilter(type), style.filter);
+  const filter = buildFeatureFilter(filterObject);
 
-  const isLabel = style.type === "symbol";
+  const isLabel = type === "symbol";
   const compress = (isLabel)
     ? initLabelParser(style)
     : initFeatureGrouper(style);
 
   return function(source, zoom) {
     // source is a dictionary of FeatureCollections, keyed on source-layer
-    if (!source) return false;
-    if (zoom < minzoom || maxzoom < zoom) return false;
+    if (!source || zoom < minzoom || maxzoom < zoom) return false;
 
     let layer = source[sourceLayer];
     if (!layer) return false;
@@ -51,4 +48,23 @@ function makeLayerFilter(style) {
 
     return collection;
   };
+}
+
+function composeFilters(filter1, filter2) {
+  if (!filter1) return filter2;
+  if (!filter2) return filter1;
+  return ["all", filter1, filter2];
+}
+
+function getGeomFilter(type) {
+  switch (type) {
+    case "circle":
+      return ["==", "$type", "Point"];
+    case "line":
+      return ["!=", "$type", "Point"]; // Could be LineString or Polygon
+    case "fill":
+      return ["==", "$type", "Polygon"];
+    default:
+      return; // No condition on geometry
+  }
 }
