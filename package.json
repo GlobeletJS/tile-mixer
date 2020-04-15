@@ -1,6 +1,6 @@
 {
   "name": "tile-mixer",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Load vector tiles, re-mixing the layers based on a Mapbox style document",
   "main": "dist/tile-mixer.bundle.js",
   "module": "dist/tile-mixer.bundle.js",
