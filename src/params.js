@@ -27,7 +27,15 @@ export function setParams(userParams) {
   // Check if this is a debugging run
   const verbose = (userParams.verbose === true) ? true : false;
 
+  // What kind of context do we have?
+  const context = userParams.context;
+  const contextType = (context instanceof CanvasRenderingContext2D)
+    ? "Canvas2D"
+    : "custom";
+
   return {
+    context,
+    contextType,
     threads,
     layers,
     getURL,

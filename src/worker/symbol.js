@@ -1,7 +1,7 @@
 import { getTokenParser } from "./tokens.js";
 import { getFontString  } from "./font.js";
 
-export function initLabelParser(style) {
+export function initSymbolParser(style) {
   const layout = style.layout;
 
   // Return a function to compute label text and sprite ID

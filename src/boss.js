@@ -1,16 +1,19 @@
-export function initWorkers(nThreads, codeHref, styles) {
+export function initWorkers(codeHref, params) {
+  const { threads, layers, contextType } = params;
+
   const tasks = {};
   var msgId = 0;
 
   // Initialize the worker threads, and send them the styles
   function trainWorker() {
     const worker = new Worker(codeHref);
-    worker.postMessage({ id: 0, type: "styles", payload: styles });
+    const payload = { contextType, styles: layers };
+    worker.postMessage({ id: 0, type: "styles", payload });
     worker.onmessage = handleMsg;
     return worker;
   }
-  const workers = Array.from(Array(nThreads), trainWorker);
-  const workLoads = Array.from(Array(nThreads), () => 0);
+  const workers = Array.from(Array(threads), trainWorker);
+  const workLoads = Array.from(Array(threads), () => 0);
 
   return {
     startTask,

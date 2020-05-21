@@ -1,52 +1,46 @@
 import { getStyleFuncs      } from 'tile-stencil';
 import { buildFeatureFilter } from "./filter-feature.js";
-import { initFeatureGrouper } from "./group-features.js";
-import { initLabelParser, getFont } from "./parse-labels.js";
+import { initProcessor } from "./process.js";
 
-export function initSourceFilter(styles) {
+export function initSourceFilter({ styles, contextType }) {
   // Make an [ID, getter] pair for each layer
   const filters = styles.map(getStyleFuncs)
-    .map(style => [style.id, makeLayerFilter(style)]);
+    .map(style => {
+      return {
+        id: style.id, 
+        filter: makeLayerFilter(style),
+        process: initProcessor(style, contextType),
+      };
+    });
 
   return function(source, zoom) {
     const filtered = {};
-    filters.forEach(([id, filter]) => {
-      let data = filter(source, zoom);
-      if (data) filtered[id] = data;
+    filters.forEach(({ id, filter, process }) => {
+      let features = filter(source, zoom);
+      if (features) filtered[id] = process(features);
     });
     return filtered; // Dictionary of FeatureCollections, keyed on style.id
   };
 }
 
 function makeLayerFilter(style) {
-  const { type, layout, interactive, minzoom = 0, maxzoom = 99 } = style;
+  const { type, filter, 
+    minzoom = 0, maxzoom = 99,
+    "source-layer": sourceLayer,
+  } = style;
 
-  const sourceLayer = style["source-layer"];
-  const filterObject = composeFilters(getGeomFilter(type), style.filter);
-  const filter = buildFeatureFilter(filterObject);
-
-  const isLabel = type === "symbol";
-  const compress = (isLabel)
-    ? initLabelParser(style)
-    : initFeatureGrouper(style);
+  const filterObject = composeFilters(getGeomFilter(type), filter);
+  const parsedFilter = buildFeatureFilter(filterObject);
 
   return function(source, zoom) {
     // source is a dictionary of FeatureCollections, keyed on source-layer
     if (!source || zoom < minzoom || maxzoom < zoom) return false;
 
     let layer = source[sourceLayer];
-    if (!layer) return false;
+    if (!layer) return;
 
-    let features = layer.features.filter(filter);
-    if (features.length < 1) return false;
-
-    let compressed = compress(features, zoom);
-
-    let collection = { type: "FeatureCollection", compressed };
-    if (interactive) collection.features = features;
-    if (isLabel) collection.properties = { font: getFont(layout, zoom) };
-
-    return collection;
+    let features = layer.features.filter(parsedFilter);
+    if (features.length > 0) return features;
   };
 }
 

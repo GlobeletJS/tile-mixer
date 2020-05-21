@@ -1,12 +1,16 @@
 import { geomToPath } from "./path.js";
+import { initFillBufferLoader } from "./fill.js";
+import { initLineBufferLoader } from "./line.js";
 
-export function initDataPrep(styles) {
+export function initDataPrep(styles, context) {
   // Build a dictionary of data prep functions, keyed on style.id
   const prepFunctions = {};
+  const pathConstructors = initPathConstructors(context);
   styles.forEach(style => {
-    prepFunctions[style.id] = (style.type === "symbol")
-      ? initTextMeasurer(style)
-      : addPaths;
+    let { id, type } = style;
+    prepFunctions[id] = 
+      (type === "symbol") ? initTextMeasurer(style)
+      : pathConstructors[type];
   });
 
   // Return a function that creates an array of prep calls for a source
@@ -31,6 +35,22 @@ function initTextMeasurer(style) {
 
     return data;
   };
+}
+
+function initPathConstructors(context) {
+  if (context instanceof CanvasRenderingContext2D) {
+    return {
+      "circle": addPaths,
+      "line": addPaths,
+      "fill": addPaths,
+    };
+  } else {
+    return {
+      "circle": addPaths,
+      "line": initLineBufferLoader(context),
+      "fill": initFillBufferLoader(context),
+    };
+  }
 }
 
 function addPaths(data) {
