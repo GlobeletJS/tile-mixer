@@ -298,10 +298,9 @@ const pathFuncs = {
   Polygon: polygonPath,
 };
 
-function geomToPath(geometry) {
-  // Converts a GeoJSON Feature geometry to a Path2D object
+function geomToPath(feature) {
+  var { geometry: { type, coordinates } } = feature;
 
-  var type = geometry.type;
   var isMulti = type.substring(0, 5) === "Multi";
   if (isMulti) type = type.substring(5);
 
@@ -309,33 +308,22 @@ function geomToPath(geometry) {
 
   const path = new Path2D();
 
-  const coords = geometry.coordinates;
   if (isMulti) {
     // While loops faster than forEach: https://jsperf.com/loops/32
-    var i = -1, n = coords.length;
-    while (++i < n) pathFunc(path, coords[i]);
+    var i = -1, n = coordinates.length;
+    while (++i < n) pathFunc(path, coordinates[i]);
 
   } else {
-    pathFunc(path, coords);
+    pathFunc(path, coordinates);
   }
 
   return path;
 }
 
-function initFillBufferLoader(context) {
+function initFillBufferLoader(context, lineLoader) {
   const { gl, constructFillVao } = context;
 
-  return function(data) {
-    data.compressed.forEach(feature => {
-      feature.buffer = loadBuffer(feature);
-      delete feature.vertices;
-      delete feature.indices;
-    });
-
-    return data;
-  }
-
-  function loadBuffer(feature) {
+  return function(feature) {
     const vertexPositions = {
       buffer: gl.createBuffer(),
       numComponents: 2,
@@ -357,9 +345,12 @@ function initFillBufferLoader(context) {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, feature.indices, gl.STATIC_DRAW);
 
     const attributes = { a_position: vertexPositions };
-    const vao = constructFillVao({ attributes, indices });
+    const fillVao = constructFillVao({ attributes, indices });
+    const path = { fillVao, indices };
 
-    return { vao, indices };
+    const strokePath = lineLoader(feature);
+
+    return Object.assign(path, strokePath);
   }
 }
 
@@ -384,24 +375,14 @@ function initLineBufferLoader(context) {
   gl.bindBuffer(gl.ARRAY_BUFFER, position.buffer);
   gl.bufferData(gl.ARRAY_BUFFER, instanceGeom, gl.STATIC_DRAW);
 
-  return function(data) {
-    data.compressed.forEach(feature => {
-      feature.buffer = loadBuffer(feature);
-      delete feature.vertices;
-      delete feature.indices;
-    });
-
-    return data;
-  }
-
-  function loadBuffer(feature) {
+  return function(feature) {
     const numComponents = 3;
-    const numInstances = feature.vertices.length / numComponents - 3;
+    const numInstances = feature.points.length / numComponents - 3;
 
     // Create buffer containing the vertex positions
     const pointsBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, pointsBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, feature.vertices, gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, feature.points, gl.STATIC_DRAW);
 
     // Create interleaved attributes pointing to different offsets in buffer
     const attributes = {
@@ -424,21 +405,21 @@ function initLineBufferLoader(context) {
       };
     }
 
-    const vao = constructStrokeVao({ attributes });
+    const strokeVao = constructStrokeVao({ attributes });
 
-    return { vao, numInstances };
+    return { strokeVao, numInstances };
   }
 }
 
 function initDataPrep(styles, context) {
   // Build a dictionary of data prep functions, keyed on style.id
   const prepFunctions = {};
-  const pathConstructors = initPathConstructors(context);
+  const pathFunctions = initPathFunctions(context);
   styles.forEach(style => {
     let { id, type } = style;
     prepFunctions[id] = 
       (type === "symbol") ? initTextMeasurer()
-      : pathConstructors[type];
+      : makePathAdder(pathFunctions[type]);
   });
 
   // Return a function that creates an array of prep calls for a source
@@ -465,30 +446,33 @@ function initTextMeasurer(style) {
   };
 }
 
-function initPathConstructors(context) {
+function initPathFunctions(context) {
   if (context instanceof CanvasRenderingContext2D) {
     return {
-      "circle": addPaths,
-      "line": addPaths,
-      "fill": addPaths,
-    };
-  } else {
-    return {
-      "circle": addPaths,
-      "line": initLineBufferLoader(context),
-      "fill": initFillBufferLoader(context),
+      "circle": geomToPath,
+      "line": geomToPath,
+      "fill": geomToPath,
     };
   }
+
+  const lineLoader = initLineBufferLoader(context);
+  const fillLoader = initFillBufferLoader(context, lineLoader);
+
+  return {
+    "circle": geomToPath,
+    "line": lineLoader,
+    "fill": fillLoader,
+  };
 }
 
-function addPaths(data) {
-  data.compressed.forEach(feature => {
-    // TODO: Does this need to be interruptable?
-    feature.path = geomToPath(feature.geometry);
-    delete feature.geometry; // Allow it to be garbage collected
-  });
-
-  return data;
+function makePathAdder(pathFunc) {
+  return function(data) {
+    data.compressed = data.compressed.map(feature => {
+      let path = pathFunc(feature);
+      return { path, properties: feature.properties };
+    });
+    return data;
+  };
 }
 
 var workerCode = String.raw`function createCommonjsModule(fn, module) {
@@ -2051,41 +2035,11 @@ earcut.flatten = function (data) {
 };
 earcut_1.default = default_1;
 
-function triangulate(feature) {
-  var { geometry: { type, coordinates }, properties } = feature;
-
-  // Normalize coordinate structure
-  if (type === "Polygon") {
-    coordinates = [coordinates];
-  } else if (type !== "MultiPolygon") {
-    return feature; // Triangulation only makes sense for Polygons/MultiPolygons
-  }
-
-  const combined = coordinates
-    .map(coord => {
-      let { vertices, holes, dimensions } = earcut_1.flatten(coord);
-      let indices = earcut_1(vertices, holes, dimensions);
-      return { vertices, indices };
-    })
-    .reduce((accumulator, current) => {
-      let indexShift = accumulator.vertices.length / 2;
-      accumulator.vertices.push(...current.vertices);
-      accumulator.indices.push(...current.indices.map(h => h + indexShift));
-      return accumulator;
-    });
-
-  return {
-    properties: Object.assign({}, properties),
-    vertices: new Float32Array(combined.vertices),
-    indices: new Uint16Array(combined.indices)
-  };
-}
-
 function parseLine(feature) {
   let { geometry, properties } = feature;
   return {
     properties: Object.assign({}, properties),
-    vertices: new Float32Array( flattenLine(geometry) ),
+    points: new Float32Array( flattenLine(geometry) ),
   };
 }
 
@@ -2126,6 +2080,41 @@ function flattenLinearRing(ring) {
     ...ring.flatMap(([x, y]) => [x, y, 0.0]),
     ...[...ring[1], -2.0]
   ];
+}
+
+function triangulate(feature) {
+  const { geometry, properties } = feature;
+
+  // Get an array of points for the outline
+  const points = new Float32Array( flattenLine(geometry) );
+
+  // Normalize coordinate structure
+  var { type, coordinates } = geometry;
+  if (type === "Polygon") {
+    coordinates = [coordinates];
+  } else if (type !== "MultiPolygon") {
+    return feature; // Triangulation only makes sense for Polygons/MultiPolygons
+  }
+
+  const combined = coordinates
+    .map(coord => {
+      let { vertices, holes, dimensions } = earcut_1.flatten(coord);
+      let indices = earcut_1(vertices, holes, dimensions);
+      return { vertices, indices };
+    })
+    .reduce((accumulator, current) => {
+      let indexShift = accumulator.vertices.length / 2;
+      accumulator.vertices.push(...current.vertices);
+      accumulator.indices.push(...current.indices.map(h => h + indexShift));
+      return accumulator;
+    });
+
+  return {
+    properties: Object.assign({}, properties),
+    vertices: new Float32Array(combined.vertices),
+    indices: new Uint16Array(combined.indices),
+    points,
+  };
 }
 
 function initProcessor(style, contextType) {

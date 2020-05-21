@@ -2,11 +2,11 @@ export function parseLine(feature) {
   let { geometry, properties } = feature;
   return {
     properties: Object.assign({}, properties),
-    vertices: new Float32Array( flattenLine(geometry) ),
+    points: new Float32Array( flattenLine(geometry) ),
   };
 }
 
-function flattenLine(geometry) {
+export function flattenLine(geometry) {
   let { type, coordinates } = geometry;
 
   switch (type) {

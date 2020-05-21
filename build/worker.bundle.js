@@ -1558,41 +1558,11 @@ earcut.flatten = function (data) {
 };
 earcut_1.default = default_1;
 
-function triangulate(feature) {
-  var { geometry: { type, coordinates }, properties } = feature;
-
-  // Normalize coordinate structure
-  if (type === "Polygon") {
-    coordinates = [coordinates];
-  } else if (type !== "MultiPolygon") {
-    return feature; // Triangulation only makes sense for Polygons/MultiPolygons
-  }
-
-  const combined = coordinates
-    .map(coord => {
-      let { vertices, holes, dimensions } = earcut_1.flatten(coord);
-      let indices = earcut_1(vertices, holes, dimensions);
-      return { vertices, indices };
-    })
-    .reduce((accumulator, current) => {
-      let indexShift = accumulator.vertices.length / 2;
-      accumulator.vertices.push(...current.vertices);
-      accumulator.indices.push(...current.indices.map(h => h + indexShift));
-      return accumulator;
-    });
-
-  return {
-    properties: Object.assign({}, properties),
-    vertices: new Float32Array(combined.vertices),
-    indices: new Uint16Array(combined.indices)
-  };
-}
-
 function parseLine(feature) {
   let { geometry, properties } = feature;
   return {
     properties: Object.assign({}, properties),
-    vertices: new Float32Array( flattenLine(geometry) ),
+    points: new Float32Array( flattenLine(geometry) ),
   };
 }
 
@@ -1633,6 +1603,41 @@ function flattenLinearRing(ring) {
     ...ring.flatMap(([x, y]) => [x, y, 0.0]),
     ...[...ring[1], -2.0]
   ];
+}
+
+function triangulate(feature) {
+  const { geometry, properties } = feature;
+
+  // Get an array of points for the outline
+  const points = new Float32Array( flattenLine(geometry) );
+
+  // Normalize coordinate structure
+  var { type, coordinates } = geometry;
+  if (type === "Polygon") {
+    coordinates = [coordinates];
+  } else if (type !== "MultiPolygon") {
+    return feature; // Triangulation only makes sense for Polygons/MultiPolygons
+  }
+
+  const combined = coordinates
+    .map(coord => {
+      let { vertices, holes, dimensions } = earcut_1.flatten(coord);
+      let indices = earcut_1(vertices, holes, dimensions);
+      return { vertices, indices };
+    })
+    .reduce((accumulator, current) => {
+      let indexShift = accumulator.vertices.length / 2;
+      accumulator.vertices.push(...current.vertices);
+      accumulator.indices.push(...current.indices.map(h => h + indexShift));
+      return accumulator;
+    });
+
+  return {
+    properties: Object.assign({}, properties),
+    vertices: new Float32Array(combined.vertices),
+    indices: new Uint16Array(combined.indices),
+    points,
+  };
 }
 
 function initProcessor(style, contextType) {

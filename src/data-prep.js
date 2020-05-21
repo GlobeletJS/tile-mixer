@@ -5,12 +5,12 @@ import { initLineBufferLoader } from "./line.js";
 export function initDataPrep(styles, context) {
   // Build a dictionary of data prep functions, keyed on style.id
   const prepFunctions = {};
-  const pathConstructors = initPathConstructors(context);
+  const pathFunctions = initPathFunctions(context);
   styles.forEach(style => {
     let { id, type } = style;
     prepFunctions[id] = 
       (type === "symbol") ? initTextMeasurer(style)
-      : pathConstructors[type];
+      : makePathAdder(pathFunctions[type]);
   });
 
   // Return a function that creates an array of prep calls for a source
@@ -37,28 +37,31 @@ function initTextMeasurer(style) {
   };
 }
 
-function initPathConstructors(context) {
+function initPathFunctions(context) {
   if (context instanceof CanvasRenderingContext2D) {
     return {
-      "circle": addPaths,
-      "line": addPaths,
-      "fill": addPaths,
-    };
-  } else {
-    return {
-      "circle": addPaths,
-      "line": initLineBufferLoader(context),
-      "fill": initFillBufferLoader(context),
+      "circle": geomToPath,
+      "line": geomToPath,
+      "fill": geomToPath,
     };
   }
+
+  const lineLoader = initLineBufferLoader(context);
+  const fillLoader = initFillBufferLoader(context, lineLoader);
+
+  return {
+    "circle": geomToPath,
+    "line": lineLoader,
+    "fill": fillLoader,
+  };
 }
 
-function addPaths(data) {
-  data.compressed.forEach(feature => {
-    // TODO: Does this need to be interruptable?
-    feature.path = geomToPath(feature.geometry);
-    delete feature.geometry; // Allow it to be garbage collected
-  });
-
-  return data;
+function makePathAdder(pathFunc) {
+  return function(data) {
+    data.compressed = data.compressed.map(feature => {
+      let path = pathFunc(feature);
+      return { path, properties: feature.properties };
+    });
+    return data;
+  };
 }

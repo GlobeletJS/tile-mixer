@@ -1,9 +1,14 @@
 import earcut from 'earcut';
+import { flattenLine } from "./line.js";
 
 export function triangulate(feature) {
-  var { geometry: { type, coordinates }, properties } = feature;
+  const { geometry, properties } = feature;
+
+  // Get an array of points for the outline
+  const points = new Float32Array( flattenLine(geometry) );
 
   // Normalize coordinate structure
+  var { type, coordinates } = geometry;
   if (type === "Polygon") {
     coordinates = [coordinates];
   } else if (type !== "MultiPolygon") {
@@ -26,6 +31,7 @@ export function triangulate(feature) {
   return {
     properties: Object.assign({}, properties),
     vertices: new Float32Array(combined.vertices),
-    indices: new Uint16Array(combined.indices)
+    indices: new Uint16Array(combined.indices),
+    points,
   };
 }

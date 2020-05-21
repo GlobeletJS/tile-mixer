@@ -23,10 +23,9 @@ const pathFuncs = {
   Polygon: polygonPath,
 };
 
-export function geomToPath(geometry) {
-  // Converts a GeoJSON Feature geometry to a Path2D object
+export function geomToPath(feature) {
+  var { geometry: { type, coordinates } } = feature;
 
-  var type = geometry.type;
   var isMulti = type.substring(0, 5) === "Multi";
   if (isMulti) type = type.substring(5);
 
@@ -34,14 +33,13 @@ export function geomToPath(geometry) {
 
   const path = new Path2D();
 
-  const coords = geometry.coordinates;
   if (isMulti) {
     // While loops faster than forEach: https://jsperf.com/loops/32
-    var i = -1, n = coords.length;
-    while (++i < n) pathFunc(path, coords[i]);
+    var i = -1, n = coordinates.length;
+    while (++i < n) pathFunc(path, coordinates[i]);
 
   } else {
-    pathFunc(path, coords);
+    pathFunc(path, coordinates);
   }
 
   return path;
