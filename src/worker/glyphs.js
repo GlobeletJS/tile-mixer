@@ -1,11 +1,11 @@
 import { getTokenParser } from "./tokens.js";
 import * as sdfManager from 'sdf-manager';
 
-export function initGlyphs({ parsedStyles, glyphEndpoint, key }) {
+export function initGlyphs({ parsedStyles, glyphEndpoint }) {
   const textGetters = parsedStyles.filter(s => s.type === "symbol")
     .reduce((d, s) => (d[s.id] = initTextGetter(s), d), {});
 
-  const getAtlas = sdfManager.initGetter(glyphEndpoint, key);
+  const getAtlas = sdfManager.initGetter(glyphEndpoint);
 
   return function(symbolLayers, zoom) {
     const fonts = symbolLayers

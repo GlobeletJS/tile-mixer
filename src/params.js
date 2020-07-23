@@ -6,8 +6,9 @@ export function setParams(userParams) {
   const {
     threads = 2,
     context,
-    layers,
+    glyphs,
     source,
+    layers,
     verbose = false,
     queue = chunkedQueue.init(),
   } = userParams;
@@ -28,8 +29,9 @@ export function setParams(userParams) {
   return {
     context,
     threads,
-    layers,
+    glyphs,
     getURL,
+    layers,
     queue,
     verbose,
   };

@@ -1,9 +1,8 @@
 import { splitLines } from "./splits.js";
 import { getTextBoxShift, getLineShift } from "./text-utils.js";
-import { GLYPH_PBF_BORDER, ATLAS_PADDING } from 'sdf-manager';
+import { GLYPH_PBF_BORDER, ATLAS_PADDING, ONE_EM } from 'sdf-manager';
 
-const ONE_EM = 24.0; // TODO: export from sdf-manager?
-const RECT_BUFFER = GLPYH_PBF_BORDER + ATLAS_PADDING;
+const RECT_BUFFER = GLYPH_PBF_BORDER + ATLAS_PADDING;
 
 export function initShaping(style) {
   const layout = style.layout;

@@ -101,8 +101,9 @@ function setParams(userParams) {
   const {
     threads = 2,
     context,
-    layers,
+    glyphs,
     source,
+    layers,
     verbose = false,
     queue = init(),
   } = userParams;
@@ -123,8 +124,9 @@ function setParams(userParams) {
   return {
     context,
     threads,
-    layers,
+    glyphs,
     getURL,
+    layers,
     queue,
     verbose,
   };
@@ -148,7 +150,7 @@ function fail(message) {
 }
 
 function initWorkers(codeHref, params) {
-  const { threads, layers } = params;
+  const { threads, glyphs, layers } = params;
 
   const tasks = {};
   var msgId = 0;
@@ -156,7 +158,7 @@ function initWorkers(codeHref, params) {
   // Initialize the worker threads, and send them the styles
   function trainWorker() {
     const worker = new Worker(codeHref);
-    const payload = { styles: layers };
+    const payload = { styles: layers, glyphEndpoint: glyphs };
     worker.postMessage({ id: 0, type: "styles", payload });
     worker.onmessage = handleMsg;
     return worker;
@@ -1950,6 +1952,7 @@ function outOfRange(point, size, image) {
 }
 
 const GLYPH_PBF_BORDER = 3;
+const ONE_EM = 24;
 
 function parseGlyphPbf(data) {
   // See mapbox-gl-js/src/style/parse_glyph_pbf.js
@@ -1987,11 +1990,8 @@ function readGlyph(tag, glyph, pbf) {
   else if (tag === 7) glyph.advance = pbf.readVarint();
 }
 
-function initGlyphCache(urlTemplate, key) {
+function initGlyphCache(endpoint) {
   const fonts = {};
-
-  // TODO: Check if urlTemplate is valid?
-  const endpoint = urlTemplate.replace('{key}', key);
 
   function getBlock(font, range) {
     const first = range * 256;
@@ -2189,7 +2189,19 @@ function copyGlyphBitmap(glyph, positions, image) {
 }
 
 function initGetter(urlTemplate, key) {
-  const getGlyph = initGlyphCache(urlTemplate, key);
+  // Check if url is valid
+  const urlOK = (
+    (typeof urlTemplate === "string" || urlTemplate instanceof String) &&
+    urlTemplate.slice(0, 4) === "http"
+  );
+  if (!urlOK) return console.log("sdf-manager: no valid glyphs URL!");
+
+  // Put in the API key, if supplied
+  const endpoint = (key)
+    ? urlTemplate.replace('{key}', key)
+    : urlTemplate;
+
+  const getGlyph = initGlyphCache(endpoint);
 
   return function(fonts) {
     // fonts = { font1: [code1, code2...], font2: ... }
@@ -2211,11 +2223,11 @@ function initGetter(urlTemplate, key) {
   };
 }
 
-function initGlyphs({ parsedStyles, glyphEndpoint, key }) {
+function initGlyphs({ parsedStyles, glyphEndpoint }) {
   const textGetters = parsedStyles.filter(s => s.type === "symbol")
     .reduce((d, s) => (d[s.id] = initTextGetter(s), d), {});
 
-  const getAtlas = initGetter(glyphEndpoint, key);
+  const getAtlas = initGetter(glyphEndpoint);
 
   return function(symbolLayers, zoom) {
     const fonts = symbolLayers
@@ -2455,8 +2467,7 @@ function calculatePenalty(code, nextCode) {
   return penalty;
 }
 
-const ONE_EM = 24.0; // TODO: export from sdf-manager?
-const RECT_BUFFER = GLPYH_PBF_BORDER + ATLAS_PADDING;
+const RECT_BUFFER = GLYPH_PBF_BORDER + ATLAS_PADDING;
 
 function initShaping(style) {
   const layout = style.layout;
@@ -3373,11 +3384,11 @@ function makeTypedArrays(feature) {
   return feature;
 }
 
-function initSourceProcessor({ styles, glyphEndpoint, key }) {
+function initSourceProcessor({ styles, glyphEndpoint }) {
   const parsedStyles = styles.map(getStyleFuncs);
 
   const sourceFilter = initSourceFilter(parsedStyles);
-  const getGlyphs = initGlyphs({ parsedStyles, glyphEndpoint, key });
+  const getGlyphs = initGlyphs({ parsedStyles, glyphEndpoint });
   const processors = parsedStyles
     .reduce((d, s) => (d[s.id] = initProcessor(s), d), {});
 

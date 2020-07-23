@@ -6,11 +6,11 @@ import { triangulate } from "./fill.js";
 import { parseLine } from "./line.js";
 import { initFeatureGrouper } from "./group-features.js";
 
-export function initSourceProcessor({ styles, glyphEndpoint, key }) {
+export function initSourceProcessor({ styles, glyphEndpoint }) {
   const parsedStyles = styles.map(getStyleFuncs);
 
   const sourceFilter = initSourceFilter(parsedStyles);
-  const getGlyphs = initGlyphs({ parsedStyles, glyphEndpoint, key });
+  const getGlyphs = initGlyphs({ parsedStyles, glyphEndpoint });
   const processors = parsedStyles
     .reduce((d, s) => (d[s.id] = initProcessor(s), d), {});
 
