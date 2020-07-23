@@ -4,9 +4,6 @@ import { flattenLine } from "./line.js";
 export function triangulate(feature) {
   const { geometry, properties } = feature;
 
-  // Get an array of points for the outline
-  const points = new Float32Array( flattenLine(geometry) );
-
   // Normalize coordinate structure
   var { type, coordinates } = geometry;
   if (type === "Polygon") {
@@ -28,10 +25,11 @@ export function triangulate(feature) {
       return accumulator;
     });
 
-  return {
-    properties: Object.assign({}, properties),
-    vertices: new Float32Array(combined.vertices),
-    indices: new Uint16Array(combined.indices),
-    points,
+  const buffers = {
+    vertices: combined.vertices,
+    indices: combined.indices,
+    points: flattenLine(geometry), // For rendering the outline
   };
+
+  return { properties, buffers };
 }

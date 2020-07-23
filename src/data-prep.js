@@ -1,67 +1,45 @@
-import { geomToPath } from "./path.js";
 import { initFillBufferLoader } from "./fill.js";
 import { initLineBufferLoader } from "./line.js";
+import { initTextBufferLoader } from "./text.js";
+import { initAtlasLoader } from "./atlas.js";
 
 export function initDataPrep(styles, context) {
+  const lineLoader = initLineBufferLoader(context);
+  const fillLoader = initFillBufferLoader(context, lineLoader);
+  const textLoader = initTextBufferLoader(context);
+  const loadAtlas  = initAtlasLoader(context);
+
+  const pathFuncs = {
+    "circle": () => undefined, // TODO
+    "line": makePathAdder(lineLoader),
+    "fill": makePathAdder(fillLoader),
+    "symbol": makePathAdder(textLoader), // TODO: add sprite handling
+  };
+
   // Build a dictionary of data prep functions, keyed on style.id
-  const prepFunctions = {};
-  const pathFunctions = initPathFunctions(context);
-  styles.forEach(style => {
+  const prepFunctions = styles.reduce((dict, style) => {
     let { id, type } = style;
-    prepFunctions[id] = 
-      (type === "symbol") ? initTextMeasurer(style)
-      : makePathAdder(pathFunctions[type]);
-  });
+    dict[id] = pathFuncs[type];
+    return dict;
+  }, {});
 
   // Return a function that creates an array of prep calls for a source
   return function (source, zoom) {
-    return Object.keys(source)
-      .map( id => () => prepFunctions[id](source[id], zoom) );
-  };
-}
+    let { atlas, layers } = source;
 
-function initTextMeasurer(style) {
-  // TODO: This closure only saves one createElement call. Is it worth it?
-  const ctx = document.createElement("canvas").getContext("2d");
+    prepTasks = Object.keys(layers)
+      .map(id => () => prepFunctions[id](layers[id], zoom));
 
-  return function(data, zoom) {
-    ctx.font = data.properties.font;
+    prepTasks.push(() => { source.atlas = loadAtlas(atlas); });
 
-    data.compressed.forEach(feature => {
-      let labelText = feature.properties.labelText;
-      if (!labelText) return;
-      feature.properties.textWidth = ctx.measureText(labelText).width;
-    });
-
-    return data;
-  };
-}
-
-function initPathFunctions(context) {
-  if (context instanceof CanvasRenderingContext2D) {
-    return {
-      "circle": geomToPath,
-      "line": geomToPath,
-      "fill": geomToPath,
-    };
-  }
-
-  const lineLoader = initLineBufferLoader(context);
-  const fillLoader = initFillBufferLoader(context, lineLoader);
-
-  return {
-    "circle": geomToPath,
-    "line": lineLoader,
-    "fill": fillLoader,
+    return prepTasks;
   };
 }
 
 function makePathAdder(pathFunc) {
-  return function(data) {
-    data.compressed = data.compressed.map(feature => {
-      let path = pathFunc(feature);
-      return { path, properties: feature.properties };
-    });
-    return data;
-  };
+  // TODO: make this more functional? Note: keeping feature.properties
+  return (features) => features.forEach(feature => {
+    feature.path = pathFunc(feature.buffers);
+    delete feature.buffers;  // Should we do this?
+  });
 }

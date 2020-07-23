@@ -1,9 +1,8 @@
 export function parseLine(feature) {
-  let { geometry, properties } = feature;
-  return {
-    properties: Object.assign({}, properties),
-    points: new Float32Array( flattenLine(geometry) ),
-  };
+  const { geometry, properties } = feature;
+  const buffers = { points: flattenLine(geometry) };
+
+  return { properties, buffers };
 }
 
 export function flattenLine(geometry) {

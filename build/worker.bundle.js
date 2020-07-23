@@ -1,3 +1,132 @@
+function buildFeatureFilter(filterObj) {
+  // filterObj is a filter definition following the "deprecated" syntax:
+  // https://docs.mapbox.com/mapbox-gl-js/style-spec/#other-filter
+  if (!filterObj) return () => true;
+  const [type, ...vals] = filterObj;
+
+  // If this is a combined filter, the vals are themselves filter definitions
+  switch (type) {
+    case "all": {
+      let filters = vals.map(buildFeatureFilter);  // Iteratively recursive!
+      return (d) => filters.every( filt => filt(d) );
+    }
+    case "any": {
+      let filters = vals.map(buildFeatureFilter);
+      return (d) => filters.some( filt => filt(d) );
+    }
+    case "none": {
+      let filters = vals.map(buildFeatureFilter);
+      return (d) => filters.every( filt => !filt(d) );
+    }
+    default:
+      return getSimpleFilter(filterObj);
+  }
+}
+
+function getSimpleFilter(filterObj) {
+  const [type, key, ...vals] = filterObj;
+  const getVal = initFeatureValGetter(key);
+
+  switch (type) {
+    // Existential Filters
+    case "has": 
+      return d => !!getVal(d); // !! forces a Boolean return
+    case "!has": 
+      return d => !getVal(d);
+
+    // Comparison Filters
+    case "==": 
+      return d => getVal(d) === vals[0];
+    case "!=":
+      return d => getVal(d) !== vals[0];
+    case ">":
+      return d => getVal(d) > vals[0];
+    case ">=":
+      return d => getVal(d) >= vals[0];
+    case "<":
+      return d => getVal(d) < vals[0];
+    case "<=":
+      return d => getVal(d) <= vals[0];
+
+    // Set Membership Filters
+    case "in" :
+      return d => vals.includes( getVal(d) );
+    case "!in" :
+      return d => !vals.includes( getVal(d) );
+    default:
+      console.log("prepFilter: unknown filter type = " + filterObj[0]);
+  }
+  // No recognizable filter criteria. Return a filter that is always true
+  return () => true;
+}
+
+function initFeatureValGetter(key) {
+  switch (key) {
+    case "$type":
+      // NOTE: data includes MultiLineString, MultiPolygon, etc-NOT IN SPEC
+      return f => {
+        let t = f.geometry.type;
+        if (t === "MultiPoint") return "Point";
+        if (t === "MultiLineString") return "LineString";
+        if (t === "MultiPolygon") return "Polygon";
+        return t;
+      };
+    case "$id":
+      return f => f.id;
+    default:
+      return f => f.properties[key];
+  }
+}
+
+function initSourceFilter(styles) {
+  const filters = styles.map(initLayerFilter);
+
+  return function(source, zoom) {
+    return filters.map(filter => filter(source, zoom))
+      .filter(data => data !== undefined);
+  };
+}
+
+function initLayerFilter(style) {
+  const { id, type, filter,
+    minzoom = 0, maxzoom = 99,
+    "source-layer": sourceLayer,
+  } = style;
+
+  const filterObject = composeFilters(getGeomFilter(type), filter);
+  const parsedFilter = buildFeatureFilter(filterObject);
+
+  return function(source, zoom) {
+    // source is a dictionary of FeatureCollections, keyed on source-layer
+    if (!source || zoom < minzoom || maxzoom < zoom) return;
+
+    let layer = source[sourceLayer];
+    if (!layer) return;
+
+    let features = layer.features.filter(parsedFilter);
+    if (features.length > 0) return { id, type, features };
+  };
+}
+
+function composeFilters(filter1, filter2) {
+  if (!filter1) return filter2;
+  if (!filter2) return filter1;
+  return ["all", filter1, filter2];
+}
+
+function getGeomFilter(type) {
+  switch (type) {
+    case "circle":
+      return ["==", "$type", "Point"];
+    case "line":
+      return ["!=", "$type", "Point"]; // Could be LineString or Polygon
+    case "fill":
+      return ["==", "$type", "Polygon"];
+    default:
+      return; // No condition on geometry
+  }
+}
+
 function createCommonjsModule(fn, module) {
 	return module = { exports: {} }, fn(module, module.exports), module.exports;
 }
@@ -510,86 +639,6 @@ function getStyleFuncs(inputLayer) {
   return layer;
 }
 
-function buildFeatureFilter(filterObj) {
-  // filterObj is a filter definition following the "deprecated" syntax:
-  // https://docs.mapbox.com/mapbox-gl-js/style-spec/#other-filter
-  if (!filterObj) return () => true;
-  const [type, ...vals] = filterObj;
-
-  // If this is a combined filter, the vals are themselves filter definitions
-  switch (type) {
-    case "all": {
-      let filters = vals.map(buildFeatureFilter);  // Iteratively recursive!
-      return (d) => filters.every( filt => filt(d) );
-    }
-    case "any": {
-      let filters = vals.map(buildFeatureFilter);
-      return (d) => filters.some( filt => filt(d) );
-    }
-    case "none": {
-      let filters = vals.map(buildFeatureFilter);
-      return (d) => filters.every( filt => !filt(d) );
-    }
-    default:
-      return getSimpleFilter(filterObj);
-  }
-}
-
-function getSimpleFilter(filterObj) {
-  const [type, key, ...vals] = filterObj;
-  const getVal = initFeatureValGetter(key);
-
-  switch (type) {
-    // Existential Filters
-    case "has": 
-      return d => !!getVal(d); // !! forces a Boolean return
-    case "!has": 
-      return d => !getVal(d);
-
-    // Comparison Filters
-    case "==": 
-      return d => getVal(d) === vals[0];
-    case "!=":
-      return d => getVal(d) !== vals[0];
-    case ">":
-      return d => getVal(d) > vals[0];
-    case ">=":
-      return d => getVal(d) >= vals[0];
-    case "<":
-      return d => getVal(d) < vals[0];
-    case "<=":
-      return d => getVal(d) <= vals[0];
-
-    // Set Membership Filters
-    case "in" :
-      return d => vals.includes( getVal(d) );
-    case "!in" :
-      return d => !vals.includes( getVal(d) );
-    default:
-      console.log("prepFilter: unknown filter type = " + filterObj[0]);
-  }
-  // No recognizable filter criteria. Return a filter that is always true
-  return () => true;
-}
-
-function initFeatureValGetter(key) {
-  switch (key) {
-    case "$type":
-      // NOTE: data includes MultiLineString, MultiPolygon, etc-NOT IN SPEC
-      return f => {
-        let t = f.geometry.type;
-        if (t === "MultiPoint") return "Point";
-        if (t === "MultiLineString") return "LineString";
-        if (t === "MultiPolygon") return "Polygon";
-        return t;
-      };
-    case "$id":
-      return f => f.id;
-    default:
-      return f => f.properties[key];
-  }
-}
-
 function getTokenParser(tokenText) {
   if (!tokenText) return () => undefined;
   const tokenPattern = /{([^{}]+)}/g;
@@ -629,1101 +678,6 @@ function getTokenParser(tokenText) {
       return str += text;
     }
   };
-}
-
-// https://developer.mozilla.org/en-US/docs/Web/CSS/font-weight#Common_weight_name_mapping
-// Some obscure names from https://css3-tutorial.net/text-font/font-weight/
-// But the 2 sources conflict!! The mapping is not standardized!
-const fontWeights = {
-  "thin": 100,
-  "hairline": 100,
-  "extra-light": 200,
-  "ultra-light": 200,
-  "light": 300,
-  "book": 300,
-  "regular": 400,
-  "normal": 400,
-  "plain": 400,
-  "roman": 400,
-  "standard": 400,
-  "medium": 500,
-  "semi-bold": 600,
-  "demi-bold": 600,
-  "bold": 700,
-  "extra-bold": 800,
-  "ultra-bold": 800,
-  "heavy": 900,
-  "black": 900,
-  "fat": 900,
-  "poster": 900,
-  "ultra-black": 950,
-  "extra-black": 950,
-  "heavy-black": 950,
-};
-const wNames = Object.keys(fontWeights);
-
-function popFontWeight(words, defaultWeight) {
-  // Input words is an array of words from a font descriptor string, 
-  // where the last word (or two) may contain font-weight info. 
-  // Returns a numeric font-weight (if found), or defaultWeight
-  // NOTES
-  //  - ASSUMES font-style info (italics) has already been removed.
-  //  - Input words array may be shortened!
-
-  // If the last word is already a numeric weight, just remove and return it
-  if (typeof words.slice(-1)[0] === "number") return words.pop();
-
-  // Check if the last word matches one of the weight names in the dictionary
-  var test = words.slice(-1)[0].toLowerCase();
-  let wName = wNames.find(w => w == test || w.replace("-", "") == test);
-  if (wName) {
-    words.pop();
-    return fontWeights[wName];
-  }
-
-  // Try again with the last 2 words
-  test = words.slice(-2).join(" ").toLowerCase();
-  wName = wNames.find(w => w.replace("-", " ") == test);
-  if (wName) {
-    words.pop();
-    words.pop();
-  }
-  return fontWeights[wName] || defaultWeight;
-}
-
-const italicRE = /(italic|oblique)$/i;
-const fontCache = {};
-
-function getFontString(fonts, size, lineHeight) {
-  // TODO: Need to pre-load all needed fonts, using FontFace API
-  if (!Array.isArray(fonts)) fonts = [fonts];
-
-  // Check if we already calculated the CSS for this font
-  var cssData = fontCache[fonts.join(",")];
-  if (cssData) return combine(cssData, size, lineHeight);
-
-  var weight = 400;
-  var style = 'normal';
-  var fontFamilies = [];
-  fonts.forEach(font => {
-    var parts = font.split(' ');
-
-    // Get font-style from end of string
-    var maybeStyle = parts[parts.length - 1].toLowerCase();
-    if (["normal", "italic", "oblique"].includes(maybeStyle)) {
-      style = maybeStyle;
-      parts.pop();
-    } else if (italicRE.test(maybeStyle)) {
-      // Style is part of the last word. Separate the parts
-      // NOTE: haven't seen an example of this?
-      // Idea from the mapbox-to-css module on NPM
-      style = italicRE.exec(maybeStyle)[0];
-      parts[parts.length - 1].replace(italicRE, '');
-    }
-
-    // Get font-weight
-    weight = popFontWeight(parts, weight);
-
-    // Get font-family
-    // Special handling for Noto Sans, from mapbox-to-css module on NPM
-    var fontFamily = parts.join(" ")
-      .replace('Klokantech Noto Sans', 'Noto Sans');
-    if (fontFamily.indexOf(" ") !== -1) { // Multi-word string. Wrap it in quotes
-      fontFamily = '"' + fontFamily + '"';
-    }
-    fontFamilies.push(fontFamily);
-  });
-
-  fontFamilies.push("sans-serif"); // Last resort fallback
-
-  // CSS font property: font-style font-weight font-size/line-height font-family
-  cssData = fontCache[fonts.join(",")] = [style, weight, fontFamilies];
-
-  return combine(cssData, size, lineHeight);
-}
-function combine(cssData, size, lineHeight) {
-  // Round fontSize to the nearest 0.1 pixel
-  size = Math.round(10.0 * size) * 0.1;
-
-  // Combine with line height
-  let sizes = (lineHeight) 
-    ? size + "px/" + lineHeight 
-    : size + "px";
-
-  return [cssData[0], cssData[1], sizes, cssData[2]].join(" ");
-}
-
-function initSymbolParser(style) {
-  const layout = style.layout;
-
-  // Return a function to compute label text and sprite ID
-  return function(features, zoom) {
-    const getSpriteID = getTokenParser( layout["icon-image"](zoom) );
-    const parseText = getTokenParser( layout["text-field"](zoom) );
-    const transformText = getTextTransform( layout["text-transform"](zoom) );
-
-    function getProps(properties) {
-      var spriteID = getSpriteID(properties);
-      var labelText = parseText(properties);
-      if (labelText) labelText = transformText(labelText);
-      return { spriteID, labelText };
-    }
-
-    return features.map( f => initLabel(f.geometry, getProps(f.properties)) );
-  }
-}
-
-function initLabel(geometry, properties) {
-  return {
-    //type: "Feature",  // Required by GeoJSON, but not needed for rendering
-    geometry,
-    properties,
-  };
-}
-
-function getTextTransform(code) {
-  switch (code) {
-    case "uppercase":
-      return f => f.toUpperCase();
-    case "lowercase":
-      return f => f.toLowerCase();
-    case "none":
-    default:
-      return f => f;
-  }
-}
-
-function getFont(layout, zoom) {
-  let fontSize = layout["text-size"](zoom);                                                           let fontFace = layout["text-font"](zoom);
-  let lineHeight = layout["text-line-height"](zoom);
-
-  return getFontString(fontFace, fontSize, lineHeight);
-}
-
-function initFeatureGrouper(style) {
-  // Find the names of the feature properties that affect rendering
-  const renderProps = Object.values(style.layout)
-    .concat(Object.values(style.paint))
-    .filter(styleFunc => styleFunc.type === "property")
-    .map(styleFunc => styleFunc.property);
-
-  // Return a function to group features that will be styled the same
-  return (renderProps.length > 0)
-    ? (features) => groupFeatures(features, trimProps)
-    : combineFeatures;
-
-  function trimProps(properties) {
-    let trimmed = {};
-    renderProps.forEach(key => {
-      trimmed[key] = properties[key];
-    });
-    return trimmed;
-  }
-}
-
-function groupFeatures(features, selectProperties) {
-  // Group features that will be styled the same
-  const groups = {};
-  features.forEach(feature => {
-    // Keep only the properties relevant to rendering
-    let properties = selectProperties(feature.properties);
-
-    // Look up the appropriate group, or create it if it doesn't exist
-    let key = Object.entries(properties).join();
-    if (!groups[key]) groups[key] = initFeature(feature, properties);
-
-    // Add this feature's coordinates to the grouped feature
-    addCoords(groups[key].geometry.coordinates, feature.geometry);
-  });
-
-  return Object.values(groups).map(checkType);
-}
-
-function combineFeatures(features) {
-  // No feature-dependent styles -- combine all features into one
-  var group = initFeature(features[0]);
-  features.forEach(f => addCoords(group.geometry.coordinates, f.geometry));
-  return [ checkType(group) ];
-}
-
-function initFeature(template, properties) {
-  var type = template.geometry.type;
-  return {
-    //type: "Feature", // Required by GeoJSON, but not needed for rendering
-    geometry: { type, coordinates: [] },
-    properties: properties,
-  };
-}
-
-function addCoords(coords, geom) {
-  if (geom.type.substring(0, 5) === "Multi") {
-    geom.coordinates.forEach(coord => coords.push(coord));
-  } else {
-    coords.push(geom.coordinates);
-  }
-}
-
-function checkType(feature) {
-  // Check if we have a Multi-* geometry, and make sure it is labeled correctly
-  let geom = feature.geometry;
-  let labeledMulti = geom.type.substring(0, 5) === "Multi";
-
-  if (geom.coordinates.length < 2) {  // Not Multi
-    geom.coordinates = geom.coordinates[0];
-    if (labeledMulti) geom.type = geom.type.substring(5);
-
-  } else if (!labeledMulti) {
-    geom.type = "Multi" + geom.type;
-  }
-
-  return feature;
-}
-
-var earcut_1 = earcut;
-var default_1 = earcut;
-
-function earcut(data, holeIndices, dim) {
-
-    dim = dim || 2;
-
-    var hasHoles = holeIndices && holeIndices.length,
-        outerLen = hasHoles ? holeIndices[0] * dim : data.length,
-        outerNode = linkedList(data, 0, outerLen, dim, true),
-        triangles = [];
-
-    if (!outerNode || outerNode.next === outerNode.prev) return triangles;
-
-    var minX, minY, maxX, maxY, x, y, invSize;
-
-    if (hasHoles) outerNode = eliminateHoles(data, holeIndices, outerNode, dim);
-
-    // if the shape is not too simple, we'll use z-order curve hash later; calculate polygon bbox
-    if (data.length > 80 * dim) {
-        minX = maxX = data[0];
-        minY = maxY = data[1];
-
-        for (var i = dim; i < outerLen; i += dim) {
-            x = data[i];
-            y = data[i + 1];
-            if (x < minX) minX = x;
-            if (y < minY) minY = y;
-            if (x > maxX) maxX = x;
-            if (y > maxY) maxY = y;
-        }
-
-        // minX, minY and invSize are later used to transform coords into integers for z-order calculation
-        invSize = Math.max(maxX - minX, maxY - minY);
-        invSize = invSize !== 0 ? 1 / invSize : 0;
-    }
-
-    earcutLinked(outerNode, triangles, dim, minX, minY, invSize);
-
-    return triangles;
-}
-
-// create a circular doubly linked list from polygon points in the specified winding order
-function linkedList(data, start, end, dim, clockwise) {
-    var i, last;
-
-    if (clockwise === (signedArea(data, start, end, dim) > 0)) {
-        for (i = start; i < end; i += dim) last = insertNode(i, data[i], data[i + 1], last);
-    } else {
-        for (i = end - dim; i >= start; i -= dim) last = insertNode(i, data[i], data[i + 1], last);
-    }
-
-    if (last && equals(last, last.next)) {
-        removeNode(last);
-        last = last.next;
-    }
-
-    return last;
-}
-
-// eliminate colinear or duplicate points
-function filterPoints(start, end) {
-    if (!start) return start;
-    if (!end) end = start;
-
-    var p = start,
-        again;
-    do {
-        again = false;
-
-        if (!p.steiner && (equals(p, p.next) || area(p.prev, p, p.next) === 0)) {
-            removeNode(p);
-            p = end = p.prev;
-            if (p === p.next) break;
-            again = true;
-
-        } else {
-            p = p.next;
-        }
-    } while (again || p !== end);
-
-    return end;
-}
-
-// main ear slicing loop which triangulates a polygon (given as a linked list)
-function earcutLinked(ear, triangles, dim, minX, minY, invSize, pass) {
-    if (!ear) return;
-
-    // interlink polygon nodes in z-order
-    if (!pass && invSize) indexCurve(ear, minX, minY, invSize);
-
-    var stop = ear,
-        prev, next;
-
-    // iterate through ears, slicing them one by one
-    while (ear.prev !== ear.next) {
-        prev = ear.prev;
-        next = ear.next;
-
-        if (invSize ? isEarHashed(ear, minX, minY, invSize) : isEar(ear)) {
-            // cut off the triangle
-            triangles.push(prev.i / dim);
-            triangles.push(ear.i / dim);
-            triangles.push(next.i / dim);
-
-            removeNode(ear);
-
-            // skipping the next vertex leads to less sliver triangles
-            ear = next.next;
-            stop = next.next;
-
-            continue;
-        }
-
-        ear = next;
-
-        // if we looped through the whole remaining polygon and can't find any more ears
-        if (ear === stop) {
-            // try filtering points and slicing again
-            if (!pass) {
-                earcutLinked(filterPoints(ear), triangles, dim, minX, minY, invSize, 1);
-
-            // if this didn't work, try curing all small self-intersections locally
-            } else if (pass === 1) {
-                ear = cureLocalIntersections(filterPoints(ear), triangles, dim);
-                earcutLinked(ear, triangles, dim, minX, minY, invSize, 2);
-
-            // as a last resort, try splitting the remaining polygon into two
-            } else if (pass === 2) {
-                splitEarcut(ear, triangles, dim, minX, minY, invSize);
-            }
-
-            break;
-        }
-    }
-}
-
-// check whether a polygon node forms a valid ear with adjacent nodes
-function isEar(ear) {
-    var a = ear.prev,
-        b = ear,
-        c = ear.next;
-
-    if (area(a, b, c) >= 0) return false; // reflex, can't be an ear
-
-    // now make sure we don't have other points inside the potential ear
-    var p = ear.next.next;
-
-    while (p !== ear.prev) {
-        if (pointInTriangle(a.x, a.y, b.x, b.y, c.x, c.y, p.x, p.y) &&
-            area(p.prev, p, p.next) >= 0) return false;
-        p = p.next;
-    }
-
-    return true;
-}
-
-function isEarHashed(ear, minX, minY, invSize) {
-    var a = ear.prev,
-        b = ear,
-        c = ear.next;
-
-    if (area(a, b, c) >= 0) return false; // reflex, can't be an ear
-
-    // triangle bbox; min & max are calculated like this for speed
-    var minTX = a.x < b.x ? (a.x < c.x ? a.x : c.x) : (b.x < c.x ? b.x : c.x),
-        minTY = a.y < b.y ? (a.y < c.y ? a.y : c.y) : (b.y < c.y ? b.y : c.y),
-        maxTX = a.x > b.x ? (a.x > c.x ? a.x : c.x) : (b.x > c.x ? b.x : c.x),
-        maxTY = a.y > b.y ? (a.y > c.y ? a.y : c.y) : (b.y > c.y ? b.y : c.y);
-
-    // z-order range for the current triangle bbox;
-    var minZ = zOrder(minTX, minTY, minX, minY, invSize),
-        maxZ = zOrder(maxTX, maxTY, minX, minY, invSize);
-
-    var p = ear.prevZ,
-        n = ear.nextZ;
-
-    // look for points inside the triangle in both directions
-    while (p && p.z >= minZ && n && n.z <= maxZ) {
-        if (p !== ear.prev && p !== ear.next &&
-            pointInTriangle(a.x, a.y, b.x, b.y, c.x, c.y, p.x, p.y) &&
-            area(p.prev, p, p.next) >= 0) return false;
-        p = p.prevZ;
-
-        if (n !== ear.prev && n !== ear.next &&
-            pointInTriangle(a.x, a.y, b.x, b.y, c.x, c.y, n.x, n.y) &&
-            area(n.prev, n, n.next) >= 0) return false;
-        n = n.nextZ;
-    }
-
-    // look for remaining points in decreasing z-order
-    while (p && p.z >= minZ) {
-        if (p !== ear.prev && p !== ear.next &&
-            pointInTriangle(a.x, a.y, b.x, b.y, c.x, c.y, p.x, p.y) &&
-            area(p.prev, p, p.next) >= 0) return false;
-        p = p.prevZ;
-    }
-
-    // look for remaining points in increasing z-order
-    while (n && n.z <= maxZ) {
-        if (n !== ear.prev && n !== ear.next &&
-            pointInTriangle(a.x, a.y, b.x, b.y, c.x, c.y, n.x, n.y) &&
-            area(n.prev, n, n.next) >= 0) return false;
-        n = n.nextZ;
-    }
-
-    return true;
-}
-
-// go through all polygon nodes and cure small local self-intersections
-function cureLocalIntersections(start, triangles, dim) {
-    var p = start;
-    do {
-        var a = p.prev,
-            b = p.next.next;
-
-        if (!equals(a, b) && intersects(a, p, p.next, b) && locallyInside(a, b) && locallyInside(b, a)) {
-
-            triangles.push(a.i / dim);
-            triangles.push(p.i / dim);
-            triangles.push(b.i / dim);
-
-            // remove two nodes involved
-            removeNode(p);
-            removeNode(p.next);
-
-            p = start = b;
-        }
-        p = p.next;
-    } while (p !== start);
-
-    return filterPoints(p);
-}
-
-// try splitting polygon into two and triangulate them independently
-function splitEarcut(start, triangles, dim, minX, minY, invSize) {
-    // look for a valid diagonal that divides the polygon into two
-    var a = start;
-    do {
-        var b = a.next.next;
-        while (b !== a.prev) {
-            if (a.i !== b.i && isValidDiagonal(a, b)) {
-                // split the polygon in two by the diagonal
-                var c = splitPolygon(a, b);
-
-                // filter colinear points around the cuts
-                a = filterPoints(a, a.next);
-                c = filterPoints(c, c.next);
-
-                // run earcut on each half
-                earcutLinked(a, triangles, dim, minX, minY, invSize);
-                earcutLinked(c, triangles, dim, minX, minY, invSize);
-                return;
-            }
-            b = b.next;
-        }
-        a = a.next;
-    } while (a !== start);
-}
-
-// link every hole into the outer loop, producing a single-ring polygon without holes
-function eliminateHoles(data, holeIndices, outerNode, dim) {
-    var queue = [],
-        i, len, start, end, list;
-
-    for (i = 0, len = holeIndices.length; i < len; i++) {
-        start = holeIndices[i] * dim;
-        end = i < len - 1 ? holeIndices[i + 1] * dim : data.length;
-        list = linkedList(data, start, end, dim, false);
-        if (list === list.next) list.steiner = true;
-        queue.push(getLeftmost(list));
-    }
-
-    queue.sort(compareX);
-
-    // process holes from left to right
-    for (i = 0; i < queue.length; i++) {
-        eliminateHole(queue[i], outerNode);
-        outerNode = filterPoints(outerNode, outerNode.next);
-    }
-
-    return outerNode;
-}
-
-function compareX(a, b) {
-    return a.x - b.x;
-}
-
-// find a bridge between vertices that connects hole with an outer ring and and link it
-function eliminateHole(hole, outerNode) {
-    outerNode = findHoleBridge(hole, outerNode);
-    if (outerNode) {
-        var b = splitPolygon(outerNode, hole);
-
-        // filter collinear points around the cuts
-        filterPoints(outerNode, outerNode.next);
-        filterPoints(b, b.next);
-    }
-}
-
-// David Eberly's algorithm for finding a bridge between hole and outer polygon
-function findHoleBridge(hole, outerNode) {
-    var p = outerNode,
-        hx = hole.x,
-        hy = hole.y,
-        qx = -Infinity,
-        m;
-
-    // find a segment intersected by a ray from the hole's leftmost point to the left;
-    // segment's endpoint with lesser x will be potential connection point
-    do {
-        if (hy <= p.y && hy >= p.next.y && p.next.y !== p.y) {
-            var x = p.x + (hy - p.y) * (p.next.x - p.x) / (p.next.y - p.y);
-            if (x <= hx && x > qx) {
-                qx = x;
-                if (x === hx) {
-                    if (hy === p.y) return p;
-                    if (hy === p.next.y) return p.next;
-                }
-                m = p.x < p.next.x ? p : p.next;
-            }
-        }
-        p = p.next;
-    } while (p !== outerNode);
-
-    if (!m) return null;
-
-    if (hx === qx) return m; // hole touches outer segment; pick leftmost endpoint
-
-    // look for points inside the triangle of hole point, segment intersection and endpoint;
-    // if there are no points found, we have a valid connection;
-    // otherwise choose the point of the minimum angle with the ray as connection point
-
-    var stop = m,
-        mx = m.x,
-        my = m.y,
-        tanMin = Infinity,
-        tan;
-
-    p = m;
-
-    do {
-        if (hx >= p.x && p.x >= mx && hx !== p.x &&
-                pointInTriangle(hy < my ? hx : qx, hy, mx, my, hy < my ? qx : hx, hy, p.x, p.y)) {
-
-            tan = Math.abs(hy - p.y) / (hx - p.x); // tangential
-
-            if (locallyInside(p, hole) &&
-                (tan < tanMin || (tan === tanMin && (p.x > m.x || (p.x === m.x && sectorContainsSector(m, p)))))) {
-                m = p;
-                tanMin = tan;
-            }
-        }
-
-        p = p.next;
-    } while (p !== stop);
-
-    return m;
-}
-
-// whether sector in vertex m contains sector in vertex p in the same coordinates
-function sectorContainsSector(m, p) {
-    return area(m.prev, m, p.prev) < 0 && area(p.next, m, m.next) < 0;
-}
-
-// interlink polygon nodes in z-order
-function indexCurve(start, minX, minY, invSize) {
-    var p = start;
-    do {
-        if (p.z === null) p.z = zOrder(p.x, p.y, minX, minY, invSize);
-        p.prevZ = p.prev;
-        p.nextZ = p.next;
-        p = p.next;
-    } while (p !== start);
-
-    p.prevZ.nextZ = null;
-    p.prevZ = null;
-
-    sortLinked(p);
-}
-
-// Simon Tatham's linked list merge sort algorithm
-// http://www.chiark.greenend.org.uk/~sgtatham/algorithms/listsort.html
-function sortLinked(list) {
-    var i, p, q, e, tail, numMerges, pSize, qSize,
-        inSize = 1;
-
-    do {
-        p = list;
-        list = null;
-        tail = null;
-        numMerges = 0;
-
-        while (p) {
-            numMerges++;
-            q = p;
-            pSize = 0;
-            for (i = 0; i < inSize; i++) {
-                pSize++;
-                q = q.nextZ;
-                if (!q) break;
-            }
-            qSize = inSize;
-
-            while (pSize > 0 || (qSize > 0 && q)) {
-
-                if (pSize !== 0 && (qSize === 0 || !q || p.z <= q.z)) {
-                    e = p;
-                    p = p.nextZ;
-                    pSize--;
-                } else {
-                    e = q;
-                    q = q.nextZ;
-                    qSize--;
-                }
-
-                if (tail) tail.nextZ = e;
-                else list = e;
-
-                e.prevZ = tail;
-                tail = e;
-            }
-
-            p = q;
-        }
-
-        tail.nextZ = null;
-        inSize *= 2;
-
-    } while (numMerges > 1);
-
-    return list;
-}
-
-// z-order of a point given coords and inverse of the longer side of data bbox
-function zOrder(x, y, minX, minY, invSize) {
-    // coords are transformed into non-negative 15-bit integer range
-    x = 32767 * (x - minX) * invSize;
-    y = 32767 * (y - minY) * invSize;
-
-    x = (x | (x << 8)) & 0x00FF00FF;
-    x = (x | (x << 4)) & 0x0F0F0F0F;
-    x = (x | (x << 2)) & 0x33333333;
-    x = (x | (x << 1)) & 0x55555555;
-
-    y = (y | (y << 8)) & 0x00FF00FF;
-    y = (y | (y << 4)) & 0x0F0F0F0F;
-    y = (y | (y << 2)) & 0x33333333;
-    y = (y | (y << 1)) & 0x55555555;
-
-    return x | (y << 1);
-}
-
-// find the leftmost node of a polygon ring
-function getLeftmost(start) {
-    var p = start,
-        leftmost = start;
-    do {
-        if (p.x < leftmost.x || (p.x === leftmost.x && p.y < leftmost.y)) leftmost = p;
-        p = p.next;
-    } while (p !== start);
-
-    return leftmost;
-}
-
-// check if a point lies within a convex triangle
-function pointInTriangle(ax, ay, bx, by, cx, cy, px, py) {
-    return (cx - px) * (ay - py) - (ax - px) * (cy - py) >= 0 &&
-           (ax - px) * (by - py) - (bx - px) * (ay - py) >= 0 &&
-           (bx - px) * (cy - py) - (cx - px) * (by - py) >= 0;
-}
-
-// check if a diagonal between two polygon nodes is valid (lies in polygon interior)
-function isValidDiagonal(a, b) {
-    return a.next.i !== b.i && a.prev.i !== b.i && !intersectsPolygon(a, b) && // dones't intersect other edges
-           (locallyInside(a, b) && locallyInside(b, a) && middleInside(a, b) && // locally visible
-            (area(a.prev, a, b.prev) || area(a, b.prev, b)) || // does not create opposite-facing sectors
-            equals(a, b) && area(a.prev, a, a.next) > 0 && area(b.prev, b, b.next) > 0); // special zero-length case
-}
-
-// signed area of a triangle
-function area(p, q, r) {
-    return (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
-}
-
-// check if two points are equal
-function equals(p1, p2) {
-    return p1.x === p2.x && p1.y === p2.y;
-}
-
-// check if two segments intersect
-function intersects(p1, q1, p2, q2) {
-    var o1 = sign(area(p1, q1, p2));
-    var o2 = sign(area(p1, q1, q2));
-    var o3 = sign(area(p2, q2, p1));
-    var o4 = sign(area(p2, q2, q1));
-
-    if (o1 !== o2 && o3 !== o4) return true; // general case
-
-    if (o1 === 0 && onSegment(p1, p2, q1)) return true; // p1, q1 and p2 are collinear and p2 lies on p1q1
-    if (o2 === 0 && onSegment(p1, q2, q1)) return true; // p1, q1 and q2 are collinear and q2 lies on p1q1
-    if (o3 === 0 && onSegment(p2, p1, q2)) return true; // p2, q2 and p1 are collinear and p1 lies on p2q2
-    if (o4 === 0 && onSegment(p2, q1, q2)) return true; // p2, q2 and q1 are collinear and q1 lies on p2q2
-
-    return false;
-}
-
-// for collinear points p, q, r, check if point q lies on segment pr
-function onSegment(p, q, r) {
-    return q.x <= Math.max(p.x, r.x) && q.x >= Math.min(p.x, r.x) && q.y <= Math.max(p.y, r.y) && q.y >= Math.min(p.y, r.y);
-}
-
-function sign(num) {
-    return num > 0 ? 1 : num < 0 ? -1 : 0;
-}
-
-// check if a polygon diagonal intersects any polygon segments
-function intersectsPolygon(a, b) {
-    var p = a;
-    do {
-        if (p.i !== a.i && p.next.i !== a.i && p.i !== b.i && p.next.i !== b.i &&
-                intersects(p, p.next, a, b)) return true;
-        p = p.next;
-    } while (p !== a);
-
-    return false;
-}
-
-// check if a polygon diagonal is locally inside the polygon
-function locallyInside(a, b) {
-    return area(a.prev, a, a.next) < 0 ?
-        area(a, b, a.next) >= 0 && area(a, a.prev, b) >= 0 :
-        area(a, b, a.prev) < 0 || area(a, a.next, b) < 0;
-}
-
-// check if the middle point of a polygon diagonal is inside the polygon
-function middleInside(a, b) {
-    var p = a,
-        inside = false,
-        px = (a.x + b.x) / 2,
-        py = (a.y + b.y) / 2;
-    do {
-        if (((p.y > py) !== (p.next.y > py)) && p.next.y !== p.y &&
-                (px < (p.next.x - p.x) * (py - p.y) / (p.next.y - p.y) + p.x))
-            inside = !inside;
-        p = p.next;
-    } while (p !== a);
-
-    return inside;
-}
-
-// link two polygon vertices with a bridge; if the vertices belong to the same ring, it splits polygon into two;
-// if one belongs to the outer ring and another to a hole, it merges it into a single ring
-function splitPolygon(a, b) {
-    var a2 = new Node(a.i, a.x, a.y),
-        b2 = new Node(b.i, b.x, b.y),
-        an = a.next,
-        bp = b.prev;
-
-    a.next = b;
-    b.prev = a;
-
-    a2.next = an;
-    an.prev = a2;
-
-    b2.next = a2;
-    a2.prev = b2;
-
-    bp.next = b2;
-    b2.prev = bp;
-
-    return b2;
-}
-
-// create a node and optionally link it with previous one (in a circular doubly linked list)
-function insertNode(i, x, y, last) {
-    var p = new Node(i, x, y);
-
-    if (!last) {
-        p.prev = p;
-        p.next = p;
-
-    } else {
-        p.next = last.next;
-        p.prev = last;
-        last.next.prev = p;
-        last.next = p;
-    }
-    return p;
-}
-
-function removeNode(p) {
-    p.next.prev = p.prev;
-    p.prev.next = p.next;
-
-    if (p.prevZ) p.prevZ.nextZ = p.nextZ;
-    if (p.nextZ) p.nextZ.prevZ = p.prevZ;
-}
-
-function Node(i, x, y) {
-    // vertex index in coordinates array
-    this.i = i;
-
-    // vertex coordinates
-    this.x = x;
-    this.y = y;
-
-    // previous and next vertex nodes in a polygon ring
-    this.prev = null;
-    this.next = null;
-
-    // z-order curve value
-    this.z = null;
-
-    // previous and next nodes in z-order
-    this.prevZ = null;
-    this.nextZ = null;
-
-    // indicates whether this is a steiner point
-    this.steiner = false;
-}
-
-// return a percentage difference between the polygon area and its triangulation area;
-// used to verify correctness of triangulation
-earcut.deviation = function (data, holeIndices, dim, triangles) {
-    var hasHoles = holeIndices && holeIndices.length;
-    var outerLen = hasHoles ? holeIndices[0] * dim : data.length;
-
-    var polygonArea = Math.abs(signedArea(data, 0, outerLen, dim));
-    if (hasHoles) {
-        for (var i = 0, len = holeIndices.length; i < len; i++) {
-            var start = holeIndices[i] * dim;
-            var end = i < len - 1 ? holeIndices[i + 1] * dim : data.length;
-            polygonArea -= Math.abs(signedArea(data, start, end, dim));
-        }
-    }
-
-    var trianglesArea = 0;
-    for (i = 0; i < triangles.length; i += 3) {
-        var a = triangles[i] * dim;
-        var b = triangles[i + 1] * dim;
-        var c = triangles[i + 2] * dim;
-        trianglesArea += Math.abs(
-            (data[a] - data[c]) * (data[b + 1] - data[a + 1]) -
-            (data[a] - data[b]) * (data[c + 1] - data[a + 1]));
-    }
-
-    return polygonArea === 0 && trianglesArea === 0 ? 0 :
-        Math.abs((trianglesArea - polygonArea) / polygonArea);
-};
-
-function signedArea(data, start, end, dim) {
-    var sum = 0;
-    for (var i = start, j = end - dim; i < end; i += dim) {
-        sum += (data[j] - data[i]) * (data[i + 1] + data[j + 1]);
-        j = i;
-    }
-    return sum;
-}
-
-// turn a polygon in a multi-dimensional array form (e.g. as in GeoJSON) into a form Earcut accepts
-earcut.flatten = function (data) {
-    var dim = data[0][0].length,
-        result = {vertices: [], holes: [], dimensions: dim},
-        holeIndex = 0;
-
-    for (var i = 0; i < data.length; i++) {
-        for (var j = 0; j < data[i].length; j++) {
-            for (var d = 0; d < dim; d++) result.vertices.push(data[i][j][d]);
-        }
-        if (i > 0) {
-            holeIndex += data[i - 1].length;
-            result.holes.push(holeIndex);
-        }
-    }
-    return result;
-};
-earcut_1.default = default_1;
-
-function parseLine(feature) {
-  let { geometry, properties } = feature;
-  return {
-    properties: Object.assign({}, properties),
-    points: new Float32Array( flattenLine(geometry) ),
-  };
-}
-
-function flattenLine(geometry) {
-  let { type, coordinates } = geometry;
-
-  switch (type) {
-    case "LineString":
-      return flattenLineString(coordinates);
-    case "MultiLineString":
-      return coordinates.flatMap(flattenLineString);
-    case "Polygon":
-      return flattenPolygon(coordinates);
-    case "MultiPolygon":
-      return coordinates.flatMap(flattenPolygon);
-    default:
-      return;
-  }
-}
-
-function flattenLineString(line) {
-  return [
-    ...[...line[0], -2.0],
-    ...line.flatMap(([x, y]) => [x, y, 0.0]),
-    ...[...line[line.length - 1], -2.0]
-  ];
-}
-
-function flattenPolygon(rings) {
-  return rings.flatMap(flattenLinearRing);
-}
-
-function flattenLinearRing(ring) {
-  // Definition of linear ring:
-  // ring.length > 3 && ring[ring.length - 1] == ring[0]
-  return [
-    ...[...ring[ring.length - 2], -2.0],
-    ...ring.flatMap(([x, y]) => [x, y, 0.0]),
-    ...[...ring[1], -2.0]
-  ];
-}
-
-function triangulate(feature) {
-  const { geometry, properties } = feature;
-
-  // Get an array of points for the outline
-  const points = new Float32Array( flattenLine(geometry) );
-
-  // Normalize coordinate structure
-  var { type, coordinates } = geometry;
-  if (type === "Polygon") {
-    coordinates = [coordinates];
-  } else if (type !== "MultiPolygon") {
-    return feature; // Triangulation only makes sense for Polygons/MultiPolygons
-  }
-
-  const combined = coordinates
-    .map(coord => {
-      let { vertices, holes, dimensions } = earcut_1.flatten(coord);
-      let indices = earcut_1(vertices, holes, dimensions);
-      return { vertices, indices };
-    })
-    .reduce((accumulator, current) => {
-      let indexShift = accumulator.vertices.length / 2;
-      accumulator.vertices.push(...current.vertices);
-      accumulator.indices.push(...current.indices.map(h => h + indexShift));
-      return accumulator;
-    });
-
-  return {
-    properties: Object.assign({}, properties),
-    vertices: new Float32Array(combined.vertices),
-    indices: new Uint16Array(combined.indices),
-    points,
-  };
-}
-
-function initProcessor(style, contextType) {
-  const { type, layout, interactive } = style;
-
-  const isLabel = (type === "symbol");
-  const compress = (isLabel)
-    ? initSymbolParser(style)
-    : initFeatureGrouper(style);
-
-  const postProcess =
-    (contextType === "Canvas2D") ? f => f
-    : (type === "fill") ? triangulate
-    : (type === "line") ? parseLine
-    : f => f;
-
-  return function(features, zoom) {
-    const compressed = compress(features, zoom).map(postProcess);
-
-    const collection = { type: "FeatureCollection", compressed };
-    if (interactive) collection.features = features;
-    if (isLabel) collection.properties = { font: getFont(layout, zoom) };
-
-    return collection;
-  };
-}
-
-function initSourceFilter({ styles, contextType }) {
-  // Make an [ID, getter] pair for each layer
-  const filters = styles.map(getStyleFuncs)
-    .map(style => {
-      return {
-        id: style.id, 
-        filter: makeLayerFilter(style),
-        process: initProcessor(style, contextType),
-      };
-    });
-
-  return function(source, zoom) {
-    const filtered = {};
-    filters.forEach(({ id, filter, process }) => {
-      let features = filter(source, zoom);
-      if (features) filtered[id] = process(features);
-    });
-    return filtered; // Dictionary of FeatureCollections, keyed on style.id
-  };
-}
-
-function makeLayerFilter(style) {
-  const { type, filter, 
-    minzoom = 0, maxzoom = 99,
-    "source-layer": sourceLayer,
-  } = style;
-
-  const filterObject = composeFilters(getGeomFilter(type), filter);
-  const parsedFilter = buildFeatureFilter(filterObject);
-
-  return function(source, zoom) {
-    // source is a dictionary of FeatureCollections, keyed on source-layer
-    if (!source || zoom < minzoom || maxzoom < zoom) return false;
-
-    let layer = source[sourceLayer];
-    if (!layer) return;
-
-    let features = layer.features.filter(parsedFilter);
-    if (features.length > 0) return features;
-  };
-}
-
-function composeFilters(filter1, filter2) {
-  if (!filter1) return filter2;
-  if (!filter2) return filter1;
-  return ["all", filter1, filter2];
-}
-
-function getGeomFilter(type) {
-  switch (type) {
-    case "circle":
-      return ["==", "$type", "Point"];
-    case "line":
-      return ["!=", "$type", "Point"]; // Could be LineString or Polygon
-    case "fill":
-      return ["==", "$type", "Polygon"];
-    default:
-      return; // No condition on geometry
-  }
 }
 
 var read = function (buffer, offset, isLE, mLen, nBytes) {
@@ -2457,6 +1411,1559 @@ function writeUtf8(buf, str, pos) {
     return pos;
 }
 
+class AlphaImage {
+  // See mapbox-gl-js/src/util/image.js
+  constructor(size, data) {
+    createImage(this, size, 1, data);
+  }
+
+  resize(size) {
+    resizeImage(this, size, 1);
+  }
+
+  clone() {
+    return new AlphaImage(
+      { width: this.width, height: this.height },
+      new Uint8Array(this.data)
+    );
+  }
+
+  static copy(srcImg, dstImg, srcPt, dstPt, size) {
+    copyImage(srcImg, dstImg, srcPt, dstPt, size, 1);
+  }
+}
+
+function createImage(image, { width, height }, channels, data) {
+  if (!data) {
+    data = new Uint8Array(width * height * channels);
+  } else if (data.length !== width * height * channels) {
+    throw new RangeError('mismatched image size');
+  }
+  return Object.assign(image, { width, height, data });
+}
+
+function resizeImage(image, { width, height }, channels) {
+  if (width === image.width && height === image.height) return;
+
+  const size = { 
+    width: Math.min(image.width, width),
+    height: Math.min(image.height, height),
+  };
+
+  const newImage = createImage({}, { width, height }, channels);
+
+  copyImage(image, newImage, { x: 0, y: 0 }, { x: 0, y: 0 }, size, channels);
+
+  Object.assign(image, { width, height, data: newImage.data });
+}
+
+function copyImage(srcImg, dstImg, srcPt, dstPt, size, channels) {
+  if (size.width === 0 || size.height === 0) return dstImg;
+
+  if (outOfRange(srcPt, size, srcImg)) {
+    throw new RangeError('out of range source coordinates for image copy');
+  }
+  if (outOfRange(dstPt, size, dstImg)) {
+    throw new RangeError('out of range destination coordinates for image copy');
+  }
+
+  const srcData = srcImg.data;
+  const dstData = dstImg.data;
+
+  console.assert(
+    srcData !== dstData,
+    "copyImage: src and dst data are identical!"
+  );
+
+  for (let y = 0; y < size.height; y++) {
+    const srcOffset = ((srcPt.y + y) * srcImg.width + srcPt.x) * channels;
+    const dstOffset = ((dstPt.y + y) * dstImg.width + dstPt.x) * channels;
+    for (let i = 0; i < size.width * channels; i++) {
+      dstData[dstOffset + i] = srcData[srcOffset + i];
+    }
+  }
+
+  return dstImg;
+}
+
+function outOfRange(point, size, image) {
+  let { width, height } = size;
+  return (
+    width > image.width ||
+    height > image.height ||
+    point.x > image.width - width ||
+    point.y > image.height - height
+  );
+}
+
+const GLYPH_PBF_BORDER = 3;
+
+function parseGlyphPbf(data) {
+  // See mapbox-gl-js/src/style/parse_glyph_pbf.js
+  // Input is an ArrayBuffer, which will be read as a Uint8Array
+  return new pbf(data).readFields(readFontstacks, []);
+}
+
+function readFontstacks(tag, glyphs, pbf) {
+  if (tag === 1) pbf.readMessage(readFontstack, glyphs);
+}
+
+function readFontstack(tag, glyphs, pbf) {
+  if (tag !== 3) return;
+
+  const glyph = pbf.readMessage(readGlyph, {});
+  const { id, bitmap, width, height, left, top, advance } = glyph;
+
+  const borders = 2 * GLYPH_PBF_BORDER;
+  const size = { width: width + borders, height: height + borders };
+
+  glyphs.push({
+    id,
+    bitmap: new AlphaImage(size, bitmap),
+    metrics: { width, height, left, top, advance }
+  });
+}
+
+function readGlyph(tag, glyph, pbf) {
+  if (tag === 1) glyph.id = pbf.readVarint();
+  else if (tag === 2) glyph.bitmap = pbf.readBytes();
+  else if (tag === 3) glyph.width = pbf.readVarint();
+  else if (tag === 4) glyph.height = pbf.readVarint();
+  else if (tag === 5) glyph.left = pbf.readSVarint();
+  else if (tag === 6) glyph.top = pbf.readSVarint();
+  else if (tag === 7) glyph.advance = pbf.readVarint();
+}
+
+function initGlyphCache(urlTemplate, key) {
+  const fonts = {};
+
+  // TODO: Check if urlTemplate is valid?
+  const endpoint = urlTemplate.replace('{key}', key);
+
+  function getBlock(font, range) {
+    const first = range * 256;
+    const last = first + 255;
+    const href = endpoint
+      .replace('{fontstack}', font.split(" ").join("%20"))
+      .replace('{range}', first + "-" + last);
+
+    return fetch(href)
+      .then( getArrayBuffer )
+      .then( parseGlyphPbf  )
+      .then( makeGlyphDict  );
+  }
+
+  return function(font, code) {
+    // 1. Find the 256-char block containing this code
+    if (code > 65535) throw Error('glyph codes > 65535 not supported');
+    const range = Math.floor(code / 256);
+
+    // 2. Get the Promise for the retrieval and parsing of the block
+    const blocks = fonts[font] || (fonts[font] = {});
+    const block = blocks[range] || (blocks[range] = getBlock(font, range));
+
+    // 3. Return a Promise that resolves to the requested glyph
+    return block.then(glyphs => glyphs[code]);
+  };
+}
+
+function getArrayBuffer(response) {
+  if (!response.ok) throw Error(response.status + " " + response.statusText);
+  return response.arrayBuffer();
+}
+
+function makeGlyphDict(glyphs) {
+  const glyphDict = {};
+  glyphs.forEach(glyph => {
+    glyphDict[glyph.id] = glyph;
+  });
+  return glyphDict;
+}
+
+function potpack(boxes) {
+
+    // calculate total box area and maximum box width
+    let area = 0;
+    let maxWidth = 0;
+
+    for (const box of boxes) {
+        area += box.w * box.h;
+        maxWidth = Math.max(maxWidth, box.w);
+    }
+
+    // sort the boxes for insertion by height, descending
+    boxes.sort((a, b) => b.h - a.h);
+
+    // aim for a squarish resulting container,
+    // slightly adjusted for sub-100% space utilization
+    const startWidth = Math.max(Math.ceil(Math.sqrt(area / 0.95)), maxWidth);
+
+    // start with a single empty space, unbounded at the bottom
+    const spaces = [{x: 0, y: 0, w: startWidth, h: Infinity}];
+
+    let width = 0;
+    let height = 0;
+
+    for (const box of boxes) {
+        // look through spaces backwards so that we check smaller spaces first
+        for (let i = spaces.length - 1; i >= 0; i--) {
+            const space = spaces[i];
+
+            // look for empty spaces that can accommodate the current box
+            if (box.w > space.w || box.h > space.h) continue;
+
+            // found the space; add the box to its top-left corner
+            // |-------|-------|
+            // |  box  |       |
+            // |_______|       |
+            // |         space |
+            // |_______________|
+            box.x = space.x;
+            box.y = space.y;
+
+            height = Math.max(height, box.y + box.h);
+            width = Math.max(width, box.x + box.w);
+
+            if (box.w === space.w && box.h === space.h) {
+                // space matches the box exactly; remove it
+                const last = spaces.pop();
+                if (i < spaces.length) spaces[i] = last;
+
+            } else if (box.h === space.h) {
+                // space matches the box height; update it accordingly
+                // |-------|---------------|
+                // |  box  | updated space |
+                // |_______|_______________|
+                space.x += box.w;
+                space.w -= box.w;
+
+            } else if (box.w === space.w) {
+                // space matches the box width; update it accordingly
+                // |---------------|
+                // |      box      |
+                // |_______________|
+                // | updated space |
+                // |_______________|
+                space.y += box.h;
+                space.h -= box.h;
+
+            } else {
+                // otherwise the box splits the space into two spaces
+                // |-------|-----------|
+                // |  box  | new space |
+                // |_______|___________|
+                // | updated space     |
+                // |___________________|
+                spaces.push({
+                    x: space.x + box.w,
+                    y: space.y,
+                    w: space.w - box.w,
+                    h: box.h
+                });
+                space.y += box.h;
+                space.h -= box.h;
+            }
+            break;
+        }
+    }
+
+    return {
+        w: width, // container width
+        h: height, // container height
+        fill: (area / (width * height)) || 0 // space utilization
+    };
+}
+
+const ATLAS_PADDING = 1;
+
+function buildAtlas(fonts) {
+  // See mapbox-gl-js/src/render/glyph_atlas.js
+
+  // Construct position objects (metrics and rects) for each glyph
+  const positions = Object.entries(fonts)
+    .reduce((pos, [font, glyphs]) => {
+      pos[font] = getPositions(glyphs);
+      return pos;
+    }, {});
+
+  // Figure out how to pack all the bitmaps into one image
+  // NOTE: modifies the rects in the positions object, in place!
+  const rects = Object.values(positions)
+    .map(fontPos => Object.values(fontPos))
+    .flat()
+    .map(p => p.rect);
+  const { w, h } = potpack(rects);
+
+  // Using the updated rects, copy all the bitmaps into one image
+  const image = new AlphaImage({ width: w || 1, height: h || 1 });
+  Object.entries(fonts).forEach(([font, glyphs]) => {
+    let fontPos = positions[font];
+    glyphs.forEach(glyph => copyGlyphBitmap(glyph, fontPos, image));
+  });
+
+  return { image, positions };
+}
+
+function getPositions(glyphs) {
+  return glyphs.reduce((dict, glyph) => {
+    let pos = getPosition(glyph);
+    if (pos) dict[glyph.id] = pos;
+    return dict;
+  }, {});
+}
+
+function getPosition(glyph) {
+  let { bitmap: { width, height }, metrics } = glyph;
+  if (width === 0 || height === 0) return;
+
+  // Construct a preliminary rect, positioned at the origin for now
+  let w = width + 2 * ATLAS_PADDING;
+  let h = height + 2 * ATLAS_PADDING;
+  let rect = { x: 0, y: 0, w, h };
+
+  return { metrics, rect };
+}
+
+function copyGlyphBitmap(glyph, positions, image) {
+  let { id, bitmap, metrics } = glyph;
+  let position = positions[id];
+  if (!position) return;
+
+  let srcPt = { x: 0, y: 0 };
+  let { x, y } = position.rect;
+  let dstPt = { x: x + ATLAS_PADDING, y: y + ATLAS_PADDING };
+  AlphaImage.copy(bitmap, image, srcPt, dstPt, bitmap);
+}
+
+function initGetter(urlTemplate, key) {
+  const getGlyph = initGlyphCache(urlTemplate, key);
+
+  return function(fonts) {
+    // fonts = { font1: [code1, code2...], font2: ... }
+    const promises = [];
+    const fontGlyphs = {};
+
+    Object.entries(fonts).forEach(([font, codes]) => {
+      const glyphs = fontGlyphs[font] = [];
+      codes.forEach(code => {
+        let request = getGlyph(font, code)
+          .then(glyph => glyphs.push(glyph));
+        promises.push(request);
+      });
+    });
+
+    return Promise.all(promises).then(() => {
+      return buildAtlas(fontGlyphs);
+    });
+  };
+}
+
+function initGlyphs({ parsedStyles, glyphEndpoint, key }) {
+  const textGetters = parsedStyles.filter(s => s.type === "symbol")
+    .reduce((d, s) => (d[s.id] = initTextGetter(s), d), {});
+
+  const getAtlas = initGetter(glyphEndpoint, key);
+
+  return function(symbolLayers, zoom) {
+    const fonts = symbolLayers
+      .forEach(l => textGetters[l.id](l.features, zoom))
+      .reduce(collectCharCodes, {});
+
+    return getAtlas(fonts);
+  };
+}
+
+function collectCharCodes(fonts, layer) {
+  let features = layer.features.filter(f => f.labelText !== undefined);
+  features.forEach(f => {
+    let font = fonts[f.font] || (fonts[f.font] = new Set());
+    let codes = f.labelText.split("").map(c => c.charCodeAt(0));
+    codes.forEach(font.add, font);
+  });
+}
+
+function initTextGetter(style) {
+  const layout = style.layout;
+
+  return function(features, zoom) {
+    features.forEach(feature => {
+      const textField = layout["text-field"](zoom, feature);
+      const text = getTokenParser(textField)(feature.properties);
+      if (!text) return;
+
+      const transformCode = layout["text-transform"](zoom, feature);
+
+      // NOTE: modifying the feature in-place!
+      feature.labelText = getTextTransform(transformCode)(text);
+      feature.font = layout["text-font"](zoom, feature);
+    });
+  }
+}
+
+function getTextTransform(code) {
+  switch (code) {
+    case "uppercase":
+      return f => f.toUpperCase();
+    case "lowercase":
+      return f => f.toLowerCase();
+    case "none":
+    default:
+      return f => f;
+  }
+}
+
+const whitespace = {
+  // From mapbox-gl-js/src/symbol/shaping.js
+  [0x09]: true, // tab
+  [0x0a]: true, // newline
+  [0x0b]: true, // vertical tab
+  [0x0c]: true, // form feed
+  [0x0d]: true, // carriage return
+  [0x20]: true, // space
+};
+
+const breakable = {
+  // From mapbox-gl-js/src/symbol/shaping.js
+  [0x0a]:   true, // newline
+  [0x20]:   true, // space
+  [0x26]:   true, // ampersand
+  [0x28]:   true, // left parenthesis
+  [0x29]:   true, // right parenthesis
+  [0x2b]:   true, // plus sign
+  [0x2d]:   true, // hyphen-minus
+  [0x2f]:   true, // solidus
+  [0xad]:   true, // soft hyphen
+  [0xb7]:   true, // middle dot
+  [0x200b]: true, // zero-width space
+  [0x2010]: true, // hyphen
+  [0x2013]: true, // en dash
+  [0x2027]: true  // interpunct
+};
+
+function getTextBoxShift(anchor) {
+  // Shift the top-left corner of the text bounding box
+  // by the returned value * bounding box dimensions
+  switch (anchor) {
+    case "top-left":
+      return [ 0.0,  0.0];
+    case "top-right":
+      return [-1.0,  0.0];
+    case "top":
+      return [-0.5,  0.0];
+    case "bottom-left":
+      return [ 0.0, -1.0];
+    case "bottom-right":
+      return [-1.0, -1.0];
+    case "bottom":
+      return [-0.5, -1.0];
+    case "left":
+      return [ 0.0, -0.5];
+    case "right":
+      return [-1.0, -0.5];
+    case "center":
+    default:
+      return [-0.5, -0.5];
+  }
+}
+
+function getLineShift(justify, boxShiftX) {
+  // Shift the start of the text line (left side) by the
+  // returned value * (boundingBoxWidth - lineWidth)
+  switch (justify) {
+    case "auto":
+      return -boxShiftX;
+    case "left":
+      return 0;
+    case "right":
+      return 1;
+    case "center":
+    default:
+      return 0.5;
+  }
+}
+
+function splitLines(glyphs, spacing, maxWidth) {
+  // glyphs is an Array of Objects with properties { code, metrics, rect }
+  // spacing and maxWidth should already be scaled to the same units as
+  //   glyph.metrics.advance
+  const widths = glyphs.map(g => { 
+    return { code: g.code, width: g.metrics.advance }
+  });
+
+  const totalWidth = widths.reduce((w, g) => (w += g.width + spacing, w), 0);
+  const lineCount = Math.max(1, Math.ceil(totalWidth / maxWidth));
+  const targetWidth = totalWidth / lineCount;
+
+  const breakPoints = getBreakPoints(widths, spacing, targetWidth);
+
+  return breakLines(glyphs, breakPoints);
+}
+
+function breakLines(glyphs, breakPoints) {
+  let start = 0;
+  const lines = [];
+
+  breakPoints.forEach(lineBreak => {
+    let line = glyphs.slice(start, lineBreak);
+
+    // Trim whitespace from both ends
+    while (line.length && whitespace[line[0]]) line.shift();
+    while (line.length && whitespace[line[line.length]]) line.pop();
+
+    lines.push(line);
+    start = lineBreak;
+  });
+
+  return lines;
+}
+
+function getBreakPoints(widths, spacing, targetWidth) {
+  const potentialLineBreaks = [];
+  const last = widths.length - 1;
+  let cursor = 0;
+
+  widths.forEach((g, i) => {
+    let { code, width } = g;
+    if (!whitespace[code]) cursor += width + spacing;
+
+    if (i == last) return;
+    if (!breakable[code] 
+      //&& !charAllowsIdeographicBreaking(code)
+    ) return;
+
+    let breakInfo = evaluateBreak(
+      i + 1,
+      cursor,
+      targetWidth,
+      potentialLineBreaks,
+      calculatePenalty(code, widths[i + 1].code),
+      false
+    );
+    potentialLineBreaks.push(breakInfo);
+  });
+
+  const lastBreak = evaluateBreak(
+    widths.length,
+    cursor,
+    targetWidth,
+    potentialLineBreaks,
+    0,
+    true
+  );
+
+  return leastBadBreaks(lastBreak);
+}
+
+function leastBadBreaks(lastBreak) {
+  if (!lastBreak) return [];
+  return leastBadBreaks(lastBreak.priorBreak).concat(lastBreak.index);
+}
+
+function evaluateBreak(index, x, targetWidth, breaks, penalty, isLastBreak) {
+  // Start by assuming the supplied (index, x) is the first break
+  const init = {
+    index, x,
+    priorBreak: null,
+    badness: calculateBadness(x)
+  };
+
+  // Now consider all previous possible break points, and
+  // return the pair corresponding to the best combination of breaks
+  return breaks.reduce((best, prev) => {
+    const badness = calculateBadness(x - prev.x) + prev.badness;
+    if (badness < best.badness) {
+      best.priorBreak = prev;
+      best.badness = badness;
+    }
+    return best;
+  }, init);
+
+  function calculateBadness(width) {
+    const raggedness = (width - targetWidth) ** 2;
+
+    if (!isLastBreak) return raggedness + Math.abs(penalty) * penalty;
+
+    // Last line: prefer shorter than average
+    return (width < targetWidth)
+      ? raggedness / 2
+      : raggedness * 2;
+  }
+}
+
+function calculatePenalty(code, nextCode) {
+  let penalty = 0;
+  // Force break on newline
+  if (code === 0x0a) penalty -= 10000;
+  // Penalize open parenthesis at end of line
+  if (code === 0x28 || code === 0xff08) penalty += 50;
+  // Penalize close parenthesis at beginning of line
+  if (nextCode === 0x29 || nextCode === 0xff09) penalty += 50;
+
+  return penalty;
+}
+
+const ONE_EM = 24.0; // TODO: export from sdf-manager?
+const RECT_BUFFER = GLPYH_PBF_BORDER + ATLAS_PADDING;
+
+function initShaping(style) {
+  const layout = style.layout;
+
+  return function(feature, zoom, atlas) {
+    // For each feature, compute a list of info for each character:
+    // - x0, y0  defining overall label position
+    // - dx, dy  delta positions relative to label position
+    // - x, y, w, h  defining the position of the glyph within the atlas
+
+    // 1. Get the glyphs for the characters
+    const glyphs = getGlyphInfo(feature, atlas);
+
+    // 2. Split into lines
+    const spacing = layout["text-letter-spacing"](zoom, feature) * ONE_EM;
+    const maxWidth = layout["text-max-width"](zoom, feature) * ONE_EM;
+    const lines = splitLines(glyphs, spacing, maxWidth);
+    // TODO: What if no labelText, or it is all whitespace?
+
+    // 3. Get dimensions of lines and overall text box
+    const lineWidths = lines.map(line => measureLine(line, spacing));
+    const lineHeight = layout["text-line-height"](zoom, feature) * ONE_EM;
+
+    const boxSize = [Math.max(...lineWidths), lines.length * lineHeight];
+    const textOffset = layout["text-offset"](zoom, feature) * ONE_EM;
+    const boxShift = getTextBoxShift( layout["text-anchor"](zoom, feature) );
+    const boxOrigin = boxShift.map((c, i) => c * boxSize[i] + textOffset[i]);
+
+    // 4. Compute origins for each line
+    const justify = layout["text-justify"](zoom, feature);
+    const lineShiftX = getLineShift(justify, boxShift[0]);
+    const lineOrigins = lineWidths.map((lineWidth, i) => {
+      let x = (boxSize[0] - lineWidth) * lineShiftX + boxOrigin[0];
+      let y = i * lineHeight + boxOrigin[1];
+      return [x, y];
+    });
+
+    // 5. Compute top left corners of the glyphs in each line
+    const deltas = lines
+      .flatMap((l, i) => layoutLine(l, lineOrigins[i], spacing));
+
+    // 6. Fill in label origins for each glyph. TODO: assumes Point geometry
+    const origin = feature.geometry.coordinates.slice();
+    const origins = lines.flat()
+      .flatMap(g => origin);
+
+    // 7. Collect all the glyph rects
+    const rects = lines.flat()
+      .flatMap(g => Object.values(g.rect));
+
+    // 8. Adjust bounding box for collision checks
+    const textPadding = layout["text-padding"](zoom, feature);
+    const bbox = [
+      boxOrigin[0] - textPadding,
+      boxOrigin[1] - textPadding,
+      boxOrigin[0] + boxSize[0] + textPadding,
+      boxOrigin[1] + boxSize[1] + textPadding
+    ];
+
+    const buffers = { origins, deltas, rects, bbox };
+
+    return { properties: feature.properties, buffers };
+  }
+}
+
+function layoutLine(glyphs, origin, spacing) {
+  var xCursor = origin[0];
+  const y0 = origin[1];
+
+  return glyphs.flatMap(g => {
+    let { left, top, advance } = g.metrics;
+
+    let dx = xCursor + left - RECT_BUFFER;
+    let dy = y0 - top - RECT_BUFFER;
+
+    xCursor += advance + spacing;
+
+    return [dx, dy];
+  });
+}
+
+function getGlyphInfo(feature, atlas) {
+  const positions = atlas.positions[feature.font];
+
+  return feature.labelText.split("").map(character => {
+    let code = character.charCodeAt(0);
+    let { metrics, rect } = positions[code];
+    return { code, metrics, rect };
+  });
+}
+
+function measureLine(glyphs, spacing) {
+  if (glyphs.length < 1) return 0;
+
+  // No initial value for reduce--so no spacing added for 1st char
+  return glyphs.map(g => g.metrics.advance)
+    .reduce((a, c) => a + c + spacing);
+}
+
+var earcut_1 = earcut;
+var default_1 = earcut;
+
+function earcut(data, holeIndices, dim) {
+
+    dim = dim || 2;
+
+    var hasHoles = holeIndices && holeIndices.length,
+        outerLen = hasHoles ? holeIndices[0] * dim : data.length,
+        outerNode = linkedList(data, 0, outerLen, dim, true),
+        triangles = [];
+
+    if (!outerNode || outerNode.next === outerNode.prev) return triangles;
+
+    var minX, minY, maxX, maxY, x, y, invSize;
+
+    if (hasHoles) outerNode = eliminateHoles(data, holeIndices, outerNode, dim);
+
+    // if the shape is not too simple, we'll use z-order curve hash later; calculate polygon bbox
+    if (data.length > 80 * dim) {
+        minX = maxX = data[0];
+        minY = maxY = data[1];
+
+        for (var i = dim; i < outerLen; i += dim) {
+            x = data[i];
+            y = data[i + 1];
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+        }
+
+        // minX, minY and invSize are later used to transform coords into integers for z-order calculation
+        invSize = Math.max(maxX - minX, maxY - minY);
+        invSize = invSize !== 0 ? 1 / invSize : 0;
+    }
+
+    earcutLinked(outerNode, triangles, dim, minX, minY, invSize);
+
+    return triangles;
+}
+
+// create a circular doubly linked list from polygon points in the specified winding order
+function linkedList(data, start, end, dim, clockwise) {
+    var i, last;
+
+    if (clockwise === (signedArea(data, start, end, dim) > 0)) {
+        for (i = start; i < end; i += dim) last = insertNode(i, data[i], data[i + 1], last);
+    } else {
+        for (i = end - dim; i >= start; i -= dim) last = insertNode(i, data[i], data[i + 1], last);
+    }
+
+    if (last && equals(last, last.next)) {
+        removeNode(last);
+        last = last.next;
+    }
+
+    return last;
+}
+
+// eliminate colinear or duplicate points
+function filterPoints(start, end) {
+    if (!start) return start;
+    if (!end) end = start;
+
+    var p = start,
+        again;
+    do {
+        again = false;
+
+        if (!p.steiner && (equals(p, p.next) || area(p.prev, p, p.next) === 0)) {
+            removeNode(p);
+            p = end = p.prev;
+            if (p === p.next) break;
+            again = true;
+
+        } else {
+            p = p.next;
+        }
+    } while (again || p !== end);
+
+    return end;
+}
+
+// main ear slicing loop which triangulates a polygon (given as a linked list)
+function earcutLinked(ear, triangles, dim, minX, minY, invSize, pass) {
+    if (!ear) return;
+
+    // interlink polygon nodes in z-order
+    if (!pass && invSize) indexCurve(ear, minX, minY, invSize);
+
+    var stop = ear,
+        prev, next;
+
+    // iterate through ears, slicing them one by one
+    while (ear.prev !== ear.next) {
+        prev = ear.prev;
+        next = ear.next;
+
+        if (invSize ? isEarHashed(ear, minX, minY, invSize) : isEar(ear)) {
+            // cut off the triangle
+            triangles.push(prev.i / dim);
+            triangles.push(ear.i / dim);
+            triangles.push(next.i / dim);
+
+            removeNode(ear);
+
+            // skipping the next vertex leads to less sliver triangles
+            ear = next.next;
+            stop = next.next;
+
+            continue;
+        }
+
+        ear = next;
+
+        // if we looped through the whole remaining polygon and can't find any more ears
+        if (ear === stop) {
+            // try filtering points and slicing again
+            if (!pass) {
+                earcutLinked(filterPoints(ear), triangles, dim, minX, minY, invSize, 1);
+
+            // if this didn't work, try curing all small self-intersections locally
+            } else if (pass === 1) {
+                ear = cureLocalIntersections(filterPoints(ear), triangles, dim);
+                earcutLinked(ear, triangles, dim, minX, minY, invSize, 2);
+
+            // as a last resort, try splitting the remaining polygon into two
+            } else if (pass === 2) {
+                splitEarcut(ear, triangles, dim, minX, minY, invSize);
+            }
+
+            break;
+        }
+    }
+}
+
+// check whether a polygon node forms a valid ear with adjacent nodes
+function isEar(ear) {
+    var a = ear.prev,
+        b = ear,
+        c = ear.next;
+
+    if (area(a, b, c) >= 0) return false; // reflex, can't be an ear
+
+    // now make sure we don't have other points inside the potential ear
+    var p = ear.next.next;
+
+    while (p !== ear.prev) {
+        if (pointInTriangle(a.x, a.y, b.x, b.y, c.x, c.y, p.x, p.y) &&
+            area(p.prev, p, p.next) >= 0) return false;
+        p = p.next;
+    }
+
+    return true;
+}
+
+function isEarHashed(ear, minX, minY, invSize) {
+    var a = ear.prev,
+        b = ear,
+        c = ear.next;
+
+    if (area(a, b, c) >= 0) return false; // reflex, can't be an ear
+
+    // triangle bbox; min & max are calculated like this for speed
+    var minTX = a.x < b.x ? (a.x < c.x ? a.x : c.x) : (b.x < c.x ? b.x : c.x),
+        minTY = a.y < b.y ? (a.y < c.y ? a.y : c.y) : (b.y < c.y ? b.y : c.y),
+        maxTX = a.x > b.x ? (a.x > c.x ? a.x : c.x) : (b.x > c.x ? b.x : c.x),
+        maxTY = a.y > b.y ? (a.y > c.y ? a.y : c.y) : (b.y > c.y ? b.y : c.y);
+
+    // z-order range for the current triangle bbox;
+    var minZ = zOrder(minTX, minTY, minX, minY, invSize),
+        maxZ = zOrder(maxTX, maxTY, minX, minY, invSize);
+
+    var p = ear.prevZ,
+        n = ear.nextZ;
+
+    // look for points inside the triangle in both directions
+    while (p && p.z >= minZ && n && n.z <= maxZ) {
+        if (p !== ear.prev && p !== ear.next &&
+            pointInTriangle(a.x, a.y, b.x, b.y, c.x, c.y, p.x, p.y) &&
+            area(p.prev, p, p.next) >= 0) return false;
+        p = p.prevZ;
+
+        if (n !== ear.prev && n !== ear.next &&
+            pointInTriangle(a.x, a.y, b.x, b.y, c.x, c.y, n.x, n.y) &&
+            area(n.prev, n, n.next) >= 0) return false;
+        n = n.nextZ;
+    }
+
+    // look for remaining points in decreasing z-order
+    while (p && p.z >= minZ) {
+        if (p !== ear.prev && p !== ear.next &&
+            pointInTriangle(a.x, a.y, b.x, b.y, c.x, c.y, p.x, p.y) &&
+            area(p.prev, p, p.next) >= 0) return false;
+        p = p.prevZ;
+    }
+
+    // look for remaining points in increasing z-order
+    while (n && n.z <= maxZ) {
+        if (n !== ear.prev && n !== ear.next &&
+            pointInTriangle(a.x, a.y, b.x, b.y, c.x, c.y, n.x, n.y) &&
+            area(n.prev, n, n.next) >= 0) return false;
+        n = n.nextZ;
+    }
+
+    return true;
+}
+
+// go through all polygon nodes and cure small local self-intersections
+function cureLocalIntersections(start, triangles, dim) {
+    var p = start;
+    do {
+        var a = p.prev,
+            b = p.next.next;
+
+        if (!equals(a, b) && intersects(a, p, p.next, b) && locallyInside(a, b) && locallyInside(b, a)) {
+
+            triangles.push(a.i / dim);
+            triangles.push(p.i / dim);
+            triangles.push(b.i / dim);
+
+            // remove two nodes involved
+            removeNode(p);
+            removeNode(p.next);
+
+            p = start = b;
+        }
+        p = p.next;
+    } while (p !== start);
+
+    return filterPoints(p);
+}
+
+// try splitting polygon into two and triangulate them independently
+function splitEarcut(start, triangles, dim, minX, minY, invSize) {
+    // look for a valid diagonal that divides the polygon into two
+    var a = start;
+    do {
+        var b = a.next.next;
+        while (b !== a.prev) {
+            if (a.i !== b.i && isValidDiagonal(a, b)) {
+                // split the polygon in two by the diagonal
+                var c = splitPolygon(a, b);
+
+                // filter colinear points around the cuts
+                a = filterPoints(a, a.next);
+                c = filterPoints(c, c.next);
+
+                // run earcut on each half
+                earcutLinked(a, triangles, dim, minX, minY, invSize);
+                earcutLinked(c, triangles, dim, minX, minY, invSize);
+                return;
+            }
+            b = b.next;
+        }
+        a = a.next;
+    } while (a !== start);
+}
+
+// link every hole into the outer loop, producing a single-ring polygon without holes
+function eliminateHoles(data, holeIndices, outerNode, dim) {
+    var queue = [],
+        i, len, start, end, list;
+
+    for (i = 0, len = holeIndices.length; i < len; i++) {
+        start = holeIndices[i] * dim;
+        end = i < len - 1 ? holeIndices[i + 1] * dim : data.length;
+        list = linkedList(data, start, end, dim, false);
+        if (list === list.next) list.steiner = true;
+        queue.push(getLeftmost(list));
+    }
+
+    queue.sort(compareX);
+
+    // process holes from left to right
+    for (i = 0; i < queue.length; i++) {
+        eliminateHole(queue[i], outerNode);
+        outerNode = filterPoints(outerNode, outerNode.next);
+    }
+
+    return outerNode;
+}
+
+function compareX(a, b) {
+    return a.x - b.x;
+}
+
+// find a bridge between vertices that connects hole with an outer ring and and link it
+function eliminateHole(hole, outerNode) {
+    outerNode = findHoleBridge(hole, outerNode);
+    if (outerNode) {
+        var b = splitPolygon(outerNode, hole);
+
+        // filter collinear points around the cuts
+        filterPoints(outerNode, outerNode.next);
+        filterPoints(b, b.next);
+    }
+}
+
+// David Eberly's algorithm for finding a bridge between hole and outer polygon
+function findHoleBridge(hole, outerNode) {
+    var p = outerNode,
+        hx = hole.x,
+        hy = hole.y,
+        qx = -Infinity,
+        m;
+
+    // find a segment intersected by a ray from the hole's leftmost point to the left;
+    // segment's endpoint with lesser x will be potential connection point
+    do {
+        if (hy <= p.y && hy >= p.next.y && p.next.y !== p.y) {
+            var x = p.x + (hy - p.y) * (p.next.x - p.x) / (p.next.y - p.y);
+            if (x <= hx && x > qx) {
+                qx = x;
+                if (x === hx) {
+                    if (hy === p.y) return p;
+                    if (hy === p.next.y) return p.next;
+                }
+                m = p.x < p.next.x ? p : p.next;
+            }
+        }
+        p = p.next;
+    } while (p !== outerNode);
+
+    if (!m) return null;
+
+    if (hx === qx) return m; // hole touches outer segment; pick leftmost endpoint
+
+    // look for points inside the triangle of hole point, segment intersection and endpoint;
+    // if there are no points found, we have a valid connection;
+    // otherwise choose the point of the minimum angle with the ray as connection point
+
+    var stop = m,
+        mx = m.x,
+        my = m.y,
+        tanMin = Infinity,
+        tan;
+
+    p = m;
+
+    do {
+        if (hx >= p.x && p.x >= mx && hx !== p.x &&
+                pointInTriangle(hy < my ? hx : qx, hy, mx, my, hy < my ? qx : hx, hy, p.x, p.y)) {
+
+            tan = Math.abs(hy - p.y) / (hx - p.x); // tangential
+
+            if (locallyInside(p, hole) &&
+                (tan < tanMin || (tan === tanMin && (p.x > m.x || (p.x === m.x && sectorContainsSector(m, p)))))) {
+                m = p;
+                tanMin = tan;
+            }
+        }
+
+        p = p.next;
+    } while (p !== stop);
+
+    return m;
+}
+
+// whether sector in vertex m contains sector in vertex p in the same coordinates
+function sectorContainsSector(m, p) {
+    return area(m.prev, m, p.prev) < 0 && area(p.next, m, m.next) < 0;
+}
+
+// interlink polygon nodes in z-order
+function indexCurve(start, minX, minY, invSize) {
+    var p = start;
+    do {
+        if (p.z === null) p.z = zOrder(p.x, p.y, minX, minY, invSize);
+        p.prevZ = p.prev;
+        p.nextZ = p.next;
+        p = p.next;
+    } while (p !== start);
+
+    p.prevZ.nextZ = null;
+    p.prevZ = null;
+
+    sortLinked(p);
+}
+
+// Simon Tatham's linked list merge sort algorithm
+// http://www.chiark.greenend.org.uk/~sgtatham/algorithms/listsort.html
+function sortLinked(list) {
+    var i, p, q, e, tail, numMerges, pSize, qSize,
+        inSize = 1;
+
+    do {
+        p = list;
+        list = null;
+        tail = null;
+        numMerges = 0;
+
+        while (p) {
+            numMerges++;
+            q = p;
+            pSize = 0;
+            for (i = 0; i < inSize; i++) {
+                pSize++;
+                q = q.nextZ;
+                if (!q) break;
+            }
+            qSize = inSize;
+
+            while (pSize > 0 || (qSize > 0 && q)) {
+
+                if (pSize !== 0 && (qSize === 0 || !q || p.z <= q.z)) {
+                    e = p;
+                    p = p.nextZ;
+                    pSize--;
+                } else {
+                    e = q;
+                    q = q.nextZ;
+                    qSize--;
+                }
+
+                if (tail) tail.nextZ = e;
+                else list = e;
+
+                e.prevZ = tail;
+                tail = e;
+            }
+
+            p = q;
+        }
+
+        tail.nextZ = null;
+        inSize *= 2;
+
+    } while (numMerges > 1);
+
+    return list;
+}
+
+// z-order of a point given coords and inverse of the longer side of data bbox
+function zOrder(x, y, minX, minY, invSize) {
+    // coords are transformed into non-negative 15-bit integer range
+    x = 32767 * (x - minX) * invSize;
+    y = 32767 * (y - minY) * invSize;
+
+    x = (x | (x << 8)) & 0x00FF00FF;
+    x = (x | (x << 4)) & 0x0F0F0F0F;
+    x = (x | (x << 2)) & 0x33333333;
+    x = (x | (x << 1)) & 0x55555555;
+
+    y = (y | (y << 8)) & 0x00FF00FF;
+    y = (y | (y << 4)) & 0x0F0F0F0F;
+    y = (y | (y << 2)) & 0x33333333;
+    y = (y | (y << 1)) & 0x55555555;
+
+    return x | (y << 1);
+}
+
+// find the leftmost node of a polygon ring
+function getLeftmost(start) {
+    var p = start,
+        leftmost = start;
+    do {
+        if (p.x < leftmost.x || (p.x === leftmost.x && p.y < leftmost.y)) leftmost = p;
+        p = p.next;
+    } while (p !== start);
+
+    return leftmost;
+}
+
+// check if a point lies within a convex triangle
+function pointInTriangle(ax, ay, bx, by, cx, cy, px, py) {
+    return (cx - px) * (ay - py) - (ax - px) * (cy - py) >= 0 &&
+           (ax - px) * (by - py) - (bx - px) * (ay - py) >= 0 &&
+           (bx - px) * (cy - py) - (cx - px) * (by - py) >= 0;
+}
+
+// check if a diagonal between two polygon nodes is valid (lies in polygon interior)
+function isValidDiagonal(a, b) {
+    return a.next.i !== b.i && a.prev.i !== b.i && !intersectsPolygon(a, b) && // dones't intersect other edges
+           (locallyInside(a, b) && locallyInside(b, a) && middleInside(a, b) && // locally visible
+            (area(a.prev, a, b.prev) || area(a, b.prev, b)) || // does not create opposite-facing sectors
+            equals(a, b) && area(a.prev, a, a.next) > 0 && area(b.prev, b, b.next) > 0); // special zero-length case
+}
+
+// signed area of a triangle
+function area(p, q, r) {
+    return (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
+}
+
+// check if two points are equal
+function equals(p1, p2) {
+    return p1.x === p2.x && p1.y === p2.y;
+}
+
+// check if two segments intersect
+function intersects(p1, q1, p2, q2) {
+    var o1 = sign(area(p1, q1, p2));
+    var o2 = sign(area(p1, q1, q2));
+    var o3 = sign(area(p2, q2, p1));
+    var o4 = sign(area(p2, q2, q1));
+
+    if (o1 !== o2 && o3 !== o4) return true; // general case
+
+    if (o1 === 0 && onSegment(p1, p2, q1)) return true; // p1, q1 and p2 are collinear and p2 lies on p1q1
+    if (o2 === 0 && onSegment(p1, q2, q1)) return true; // p1, q1 and q2 are collinear and q2 lies on p1q1
+    if (o3 === 0 && onSegment(p2, p1, q2)) return true; // p2, q2 and p1 are collinear and p1 lies on p2q2
+    if (o4 === 0 && onSegment(p2, q1, q2)) return true; // p2, q2 and q1 are collinear and q1 lies on p2q2
+
+    return false;
+}
+
+// for collinear points p, q, r, check if point q lies on segment pr
+function onSegment(p, q, r) {
+    return q.x <= Math.max(p.x, r.x) && q.x >= Math.min(p.x, r.x) && q.y <= Math.max(p.y, r.y) && q.y >= Math.min(p.y, r.y);
+}
+
+function sign(num) {
+    return num > 0 ? 1 : num < 0 ? -1 : 0;
+}
+
+// check if a polygon diagonal intersects any polygon segments
+function intersectsPolygon(a, b) {
+    var p = a;
+    do {
+        if (p.i !== a.i && p.next.i !== a.i && p.i !== b.i && p.next.i !== b.i &&
+                intersects(p, p.next, a, b)) return true;
+        p = p.next;
+    } while (p !== a);
+
+    return false;
+}
+
+// check if a polygon diagonal is locally inside the polygon
+function locallyInside(a, b) {
+    return area(a.prev, a, a.next) < 0 ?
+        area(a, b, a.next) >= 0 && area(a, a.prev, b) >= 0 :
+        area(a, b, a.prev) < 0 || area(a, a.next, b) < 0;
+}
+
+// check if the middle point of a polygon diagonal is inside the polygon
+function middleInside(a, b) {
+    var p = a,
+        inside = false,
+        px = (a.x + b.x) / 2,
+        py = (a.y + b.y) / 2;
+    do {
+        if (((p.y > py) !== (p.next.y > py)) && p.next.y !== p.y &&
+                (px < (p.next.x - p.x) * (py - p.y) / (p.next.y - p.y) + p.x))
+            inside = !inside;
+        p = p.next;
+    } while (p !== a);
+
+    return inside;
+}
+
+// link two polygon vertices with a bridge; if the vertices belong to the same ring, it splits polygon into two;
+// if one belongs to the outer ring and another to a hole, it merges it into a single ring
+function splitPolygon(a, b) {
+    var a2 = new Node(a.i, a.x, a.y),
+        b2 = new Node(b.i, b.x, b.y),
+        an = a.next,
+        bp = b.prev;
+
+    a.next = b;
+    b.prev = a;
+
+    a2.next = an;
+    an.prev = a2;
+
+    b2.next = a2;
+    a2.prev = b2;
+
+    bp.next = b2;
+    b2.prev = bp;
+
+    return b2;
+}
+
+// create a node and optionally link it with previous one (in a circular doubly linked list)
+function insertNode(i, x, y, last) {
+    var p = new Node(i, x, y);
+
+    if (!last) {
+        p.prev = p;
+        p.next = p;
+
+    } else {
+        p.next = last.next;
+        p.prev = last;
+        last.next.prev = p;
+        last.next = p;
+    }
+    return p;
+}
+
+function removeNode(p) {
+    p.next.prev = p.prev;
+    p.prev.next = p.next;
+
+    if (p.prevZ) p.prevZ.nextZ = p.nextZ;
+    if (p.nextZ) p.nextZ.prevZ = p.prevZ;
+}
+
+function Node(i, x, y) {
+    // vertex index in coordinates array
+    this.i = i;
+
+    // vertex coordinates
+    this.x = x;
+    this.y = y;
+
+    // previous and next vertex nodes in a polygon ring
+    this.prev = null;
+    this.next = null;
+
+    // z-order curve value
+    this.z = null;
+
+    // previous and next nodes in z-order
+    this.prevZ = null;
+    this.nextZ = null;
+
+    // indicates whether this is a steiner point
+    this.steiner = false;
+}
+
+// return a percentage difference between the polygon area and its triangulation area;
+// used to verify correctness of triangulation
+earcut.deviation = function (data, holeIndices, dim, triangles) {
+    var hasHoles = holeIndices && holeIndices.length;
+    var outerLen = hasHoles ? holeIndices[0] * dim : data.length;
+
+    var polygonArea = Math.abs(signedArea(data, 0, outerLen, dim));
+    if (hasHoles) {
+        for (var i = 0, len = holeIndices.length; i < len; i++) {
+            var start = holeIndices[i] * dim;
+            var end = i < len - 1 ? holeIndices[i + 1] * dim : data.length;
+            polygonArea -= Math.abs(signedArea(data, start, end, dim));
+        }
+    }
+
+    var trianglesArea = 0;
+    for (i = 0; i < triangles.length; i += 3) {
+        var a = triangles[i] * dim;
+        var b = triangles[i + 1] * dim;
+        var c = triangles[i + 2] * dim;
+        trianglesArea += Math.abs(
+            (data[a] - data[c]) * (data[b + 1] - data[a + 1]) -
+            (data[a] - data[b]) * (data[c + 1] - data[a + 1]));
+    }
+
+    return polygonArea === 0 && trianglesArea === 0 ? 0 :
+        Math.abs((trianglesArea - polygonArea) / polygonArea);
+};
+
+function signedArea(data, start, end, dim) {
+    var sum = 0;
+    for (var i = start, j = end - dim; i < end; i += dim) {
+        sum += (data[j] - data[i]) * (data[i + 1] + data[j + 1]);
+        j = i;
+    }
+    return sum;
+}
+
+// turn a polygon in a multi-dimensional array form (e.g. as in GeoJSON) into a form Earcut accepts
+earcut.flatten = function (data) {
+    var dim = data[0][0].length,
+        result = {vertices: [], holes: [], dimensions: dim},
+        holeIndex = 0;
+
+    for (var i = 0; i < data.length; i++) {
+        for (var j = 0; j < data[i].length; j++) {
+            for (var d = 0; d < dim; d++) result.vertices.push(data[i][j][d]);
+        }
+        if (i > 0) {
+            holeIndex += data[i - 1].length;
+            result.holes.push(holeIndex);
+        }
+    }
+    return result;
+};
+earcut_1.default = default_1;
+
+function parseLine(feature) {
+  const { geometry, properties } = feature;
+  const buffers = { points: flattenLine(geometry) };
+
+  return { properties, buffers };
+}
+
+function flattenLine(geometry) {
+  let { type, coordinates } = geometry;
+
+  switch (type) {
+    case "LineString":
+      return flattenLineString(coordinates);
+    case "MultiLineString":
+      return coordinates.flatMap(flattenLineString);
+    case "Polygon":
+      return flattenPolygon(coordinates);
+    case "MultiPolygon":
+      return coordinates.flatMap(flattenPolygon);
+    default:
+      return;
+  }
+}
+
+function flattenLineString(line) {
+  return [
+    ...[...line[0], -2.0],
+    ...line.flatMap(([x, y]) => [x, y, 0.0]),
+    ...[...line[line.length - 1], -2.0]
+  ];
+}
+
+function flattenPolygon(rings) {
+  return rings.flatMap(flattenLinearRing);
+}
+
+function flattenLinearRing(ring) {
+  // Definition of linear ring:
+  // ring.length > 3 && ring[ring.length - 1] == ring[0]
+  return [
+    ...[...ring[ring.length - 2], -2.0],
+    ...ring.flatMap(([x, y]) => [x, y, 0.0]),
+    ...[...ring[1], -2.0]
+  ];
+}
+
+function triangulate(feature) {
+  const { geometry, properties } = feature;
+
+  // Normalize coordinate structure
+  var { type, coordinates } = geometry;
+  if (type === "Polygon") {
+    coordinates = [coordinates];
+  } else if (type !== "MultiPolygon") {
+    return feature; // Triangulation only makes sense for Polygons/MultiPolygons
+  }
+
+  const combined = coordinates
+    .map(coord => {
+      let { vertices, holes, dimensions } = earcut_1.flatten(coord);
+      let indices = earcut_1(vertices, holes, dimensions);
+      return { vertices, indices };
+    })
+    .reduce((accumulator, current) => {
+      let indexShift = accumulator.vertices.length / 2;
+      accumulator.vertices.push(...current.vertices);
+      accumulator.indices.push(...current.indices.map(h => h + indexShift));
+      return accumulator;
+    });
+
+  const buffers = {
+    vertices: combined.vertices,
+    indices: combined.indices,
+    points: flattenLine(geometry), // For rendering the outline
+  };
+
+  return { properties, buffers };
+}
+
+function initFeatureGrouper(style) {
+  // Find the names of the feature properties that affect rendering
+  const renderPropertyNames = Object.values(style.paint)
+    .filter(styleFunc => styleFunc.type === "property")
+    .map(styleFunc => styleFunc.property);
+
+  return function(features) {
+    // Group features that will be styled the same
+    const groups = {};
+    features.forEach(feature => {
+      // Keep only the properties relevant to rendering
+      let properties = renderPropertyNames
+        .reduce((d, k) => (d[k] = feature.properties[k], d), {});
+
+      // Look up the appropriate group, or create it if it doesn't exist
+      let key = Object.entries(properties).join();
+      if (!groups[key]) groups[key] = initFeature(feature, properties);
+
+      // Append this features buffers to the grouped feature
+      appendBuffers(groups[key].buffers, feature.buffers);
+    });
+
+    return Object.values(groups).map(makeTypedArrays);
+  };
+}
+
+function initFeature(template, renderProperties) {
+  const properties = Object.assign({}, renderProperties);
+  const buffers = Object.keys(template.buffers)
+    .reduce((d, k) => (d[k] = [], d), {});
+
+  return { properties, buffers };
+}
+
+function appendBuffers(buffers, newBuffers) {
+  Object.keys(buffers).forEach(key => {
+    if (key === "indices") {
+      let indexShift = buffers.vertices.length / 2;
+      let shifted = newBuffers[key].map(i => i + indexShift);
+      buffers[key].push(...shifted);
+    } else {
+      buffers[key].push(...newBuffers[key]);
+    }
+  });
+}
+
+function makeTypedArrays(feature) {
+  const { properties, buffers } = feature;
+  // Note: modifying in place!
+  Object.keys(buffers).forEach(key => {
+    if (key === "indices") {
+      buffers[key] = new Uint16Array(buffers[key]);
+    } else {
+      buffers[key] = new Float32Array(buffers[key]);
+    }
+  });
+  return feature;
+}
+
+function initSourceProcessor({ styles, glyphEndpoint, key }) {
+  const parsedStyles = styles.map(getStyleFuncs);
+
+  const sourceFilter = initSourceFilter(parsedStyles);
+  const getGlyphs = initGlyphs({ parsedStyles, glyphEndpoint, key });
+  const processors = parsedStyles
+    .reduce((d, s) => (d[s.id] = initProcessor(s), d), {});
+
+  return function(source, zoom) {
+    const rawLayers = sourceFilter(source, zoom);
+    const symbolLayers = rawLayers.filter(l => l.type === "symbol");
+
+    return getGlyphs(symbolLayers, zoom).then(atlas => {
+      const processed = rawLayers
+        .map(l => processors[l.id](l, zoom, atlas))
+        .reduce((d, l) => (d[l.id] = l.features, d), {});
+
+      // TODO: compute symbol collisions...
+
+      // TODO: what if there is no atlas?
+      // Note: atlas.data.buffer is a Transferable
+      return { atlas: atlas.image, layers: processed };
+    });
+  };
+}
+
+function initProcessor(style) {
+  const { type, interactive } = style;
+
+  const process =
+    (type === "symbol") ? initShaping(style)
+    : (type === "fill") ? triangulate
+    : (type === "line") ? parseLine
+    : f => f; // TODO: handle circle layers
+
+  const compress = initFeatureGrouper(style);
+
+  return function(layer, zoom, atlas) {
+    let processed = layer.features.map(f => process(f, zoom, atlas));
+    //if (!interactive) delete layer.features;
+    return { id, features: compress(processed) };
+  };
+}
+
 function classifyRings(rings) {
   // Classifies an array of rings into polygons with outer rings and holes
   if (rings.length <= 1) return [rings];
@@ -2802,15 +3309,12 @@ onmessage = function(msgEvent) {
   switch (type) {
     case "styles":
       // NOTE: changing global variable!
-      filter = initSourceFilter(payload);
+      filter = initSourceProcessor(payload);
       break;
     case "start":
-      let callback = (err, result) => sendHeader(id, err, result, payload.zoom);
+      let callback = (err, result) => process(id, err, result, payload.zoom);
       let request  = readMVT(payload.href, payload.size, callback);
       tasks[id] = { request, status: "requested" };
-      break;
-    case "continue":
-      sendData(id);
       break;
     case "cancel":
       let task = tasks[id];
@@ -2821,7 +3325,7 @@ onmessage = function(msgEvent) {
   }
 };
 
-function sendHeader(id, err, result, zoom) {
+function process(id, err, result, zoom) {
   // Make sure we still have an active task for this ID
   let task = tasks[id];
   if (!task) return;  // Task must have been canceled
@@ -2831,69 +3335,23 @@ function sendHeader(id, err, result, zoom) {
     return postMessage({ id, type: "error", payload: err });
   }
 
-  result = filter(result, zoom);
-  task.result = result;
-  task.layers = Object.keys(result);
-  task.status = "parsed";
-
-  // Send a header with info about each layer
-  const headers = {};
-  task.layers.forEach(key => {
-    let data = result[key];
-    let header = { compressed: data.compressed.length };
-    if (data.features) header.features = data.features.length;
-    if (data.properties) header.properties = data.properties;
-    headers[key] = header;
-  });
-  postMessage({ id, type: "header", payload: headers });
+  task.status = "parsing";
+  return filter(result, zoom).then(tile => sendTile(id, tile));
 }
 
-function sendData(id) {
+function sendTile(id, tile) {
   // Make sure we still have an active task for this ID
   let task = tasks[id];
-  if (!task) return;  // Task must have been canceled
+  if (!task) return; // Task must have been canceled
 
-  var currentLayer = task.result[task.layers[0]];
-  // Make sure we still have data in this layer
-  var dataType = getDataType(currentLayer);
-  if (dataType === "none") {
-    task.layers.shift();           // Discard this layer
-    currentLayer = task.result[task.layers[0]];
-    dataType = getDataType(currentLayer);
-  }
-  if (task.layers.length == 0) {
-    delete tasks[id];
-    postMessage({ id, type: "done" });
-    return;
-  }
+  // Get a list of all the Transferable objects
+  const transferables = Object.values(tile.layers)
+    .flatMap(features => features.map(getFeatureBuffers));
+  transferables.push(tile.atlas.data.buffer);
 
-  // Get the next chunk of data and send it back to the main thread
-  var chunk = getChunk(currentLayer[dataType]);
-  postMessage({ id, type: dataType, key: task.layers[0], payload: chunk });
+  postMessage({ id, type: "data", payload: tile }, transferables);
 }
 
-function getDataType(layer) {
-  if (!layer) return "none";
-  // All layers have a 'compressed' array
-  if (layer.compressed.length > 0) return "compressed";
-  // 'compressed' array is empty. There might still be a 'features' array
-  if (layer.features && layer.features.length > 0) return "features";
-  return "none";
-}
-
-function getChunk(arr) {
-  // Limit to 100 KB per postMessage. TODO: Consider 10KB for cheap phones? 
-  // See https://dassur.ma/things/is-postmessage-slow/
-  const maxChunk = 100000; 
-
-  let chunk = [];
-  let chunkSize = 0;
-
-  while (arr[0] && chunkSize < maxChunk) {
-    let item = arr.shift();
-    chunkSize += JSON.stringify(item).length;
-    chunk.push(item);
-  }
-
-  return chunk;
+function getFeatureBuffers(feature) {
+  return Object.values(feature.buffers).map(b => b.buffer);
 }

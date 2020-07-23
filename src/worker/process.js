@@ -1,29 +1,51 @@
-import { initSymbolParser, getFont } from "./symbol.js";
-import { initFeatureGrouper } from "./group-features.js";
+import { initSourceFilter } from "./filter-source.js";
+import { getStyleFuncs } from 'tile-stencil';
+import { initGlyphs } from "./glyphs.js";
+import { initShaping } from "./shaping.js";
 import { triangulate } from "./fill.js";
 import { parseLine } from "./line.js";
+import { initFeatureGrouper } from "./group-features.js";
 
-export function initProcessor(style, contextType) {
-  const { type, layout, interactive } = style;
+export function initSourceProcessor({ styles, glyphEndpoint, key }) {
+  const parsedStyles = styles.map(getStyleFuncs);
 
-  const isLabel = (type === "symbol");
-  const compress = (isLabel)
-    ? initSymbolParser(style)
-    : initFeatureGrouper(style);
+  const sourceFilter = initSourceFilter(parsedStyles);
+  const getGlyphs = initGlyphs({ parsedStyles, glyphEndpoint, key });
+  const processors = parsedStyles
+    .reduce((d, s) => (d[s.id] = initProcessor(s), d), {});
 
-  const postProcess =
-    (contextType === "Canvas2D") ? f => f
+  return function(source, zoom) {
+    const rawLayers = sourceFilter(source, zoom);
+    const symbolLayers = rawLayers.filter(l => l.type === "symbol");
+
+    return getGlyphs(symbolLayers, zoom).then(atlas => {
+      const processed = rawLayers
+        .map(l => processors[l.id](l, zoom, atlas))
+        .reduce((d, l) => (d[l.id] = l.features, d), {});
+
+      // TODO: compute symbol collisions...
+
+      // TODO: what if there is no atlas?
+      // Note: atlas.data.buffer is a Transferable
+      return { atlas: atlas.image, layers: processed };
+    });
+  };
+}
+
+function initProcessor(style) {
+  const { type, interactive } = style;
+
+  const process =
+    (type === "symbol") ? initShaping(style)
     : (type === "fill") ? triangulate
     : (type === "line") ? parseLine
-    : f => f;
+    : f => f; // TODO: handle circle layers
 
-  return function(features, zoom) {
-    const compressed = compress(features, zoom).map(postProcess);
+  const compress = initFeatureGrouper(style);
 
-    const collection = { type: "FeatureCollection", compressed };
-    if (interactive) collection.features = features;
-    if (isLabel) collection.properties = { font: getFont(layout, zoom) };
-
-    return collection;
+  return function(layer, zoom, atlas) {
+    let processed = layer.features.map(f => process(f, zoom, atlas));
+    //if (!interactive) delete layer.features;
+    return { id, features: compress(processed) };
   };
 }

@@ -1,30 +1,16 @@
-import { getStyleFuncs      } from 'tile-stencil';
 import { buildFeatureFilter } from "./filter-feature.js";
-import { initProcessor } from "./process.js";
 
-export function initSourceFilter({ styles, contextType }) {
-  // Make an [ID, getter] pair for each layer
-  const filters = styles.map(getStyleFuncs)
-    .map(style => {
-      return {
-        id: style.id, 
-        filter: makeLayerFilter(style),
-        process: initProcessor(style, contextType),
-      };
-    });
+export function initSourceFilter(styles) {
+  const filters = styles.map(initLayerFilter);
 
   return function(source, zoom) {
-    const filtered = {};
-    filters.forEach(({ id, filter, process }) => {
-      let features = filter(source, zoom);
-      if (features) filtered[id] = process(features);
-    });
-    return filtered; // Dictionary of FeatureCollections, keyed on style.id
+    return filters.map(filter => filter(source, zoom))
+      .filter(data => data !== undefined);
   };
 }
 
-function makeLayerFilter(style) {
-  const { type, filter, 
+function initLayerFilter(style) {
+  const { id, type, filter,
     minzoom = 0, maxzoom = 99,
     "source-layer": sourceLayer,
   } = style;
@@ -34,13 +20,13 @@ function makeLayerFilter(style) {
 
   return function(source, zoom) {
     // source is a dictionary of FeatureCollections, keyed on source-layer
-    if (!source || zoom < minzoom || maxzoom < zoom) return false;
+    if (!source || zoom < minzoom || maxzoom < zoom) return;
 
     let layer = source[sourceLayer];
     if (!layer) return;
 
     let features = layer.features.filter(parsedFilter);
-    if (features.length > 0) return features;
+    if (features.length > 0) return { id, type, features };
   };
 }
 

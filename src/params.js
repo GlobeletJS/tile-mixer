@@ -3,10 +3,16 @@ import * as chunkedQueue from 'chunked-queue';
 const vectorTypes = ["symbol", "circle", "line", "fill"];
 
 export function setParams(userParams) {
-  const threads = userParams.threads || 2;
+  const {
+    threads = 2,
+    context,
+    layers,
+    source,
+    verbose = false,
+    queue = chunkedQueue.init(),
+  } = userParams;
 
   // Confirm supplied styles are all vector layers reading from the same source
-  const layers = userParams.layers;
   if (!layers || !layers.length) fail("no valid array of style layers!");
 
   let allVectors = layers.every( l => vectorTypes.includes(l.type) );
@@ -16,26 +22,11 @@ export function setParams(userParams) {
   if (!sameSource) fail("supplied layers use different sources!");
 
   // Construct function to get a tile URL
-  if (!userParams.source) fail("parameters.source is required!");
-  const getURL = initUrlFunc(userParams.source.tiles);
-
-  // Construct the task queue, if not supplied
-  const queue = (userParams.queue)
-    ? userParams.queue
-    : chunkedQueue.init();
-
-  // Check if this is a debugging run
-  const verbose = (userParams.verbose === true) ? true : false;
-
-  // What kind of context do we have?
-  const context = userParams.context;
-  const contextType = (context instanceof CanvasRenderingContext2D)
-    ? "Canvas2D"
-    : "custom";
+  if (!source) fail("parameters.source is required!");
+  const getURL = initUrlFunc(source.tiles);
 
   return {
     context,
-    contextType,
     threads,
     layers,
     getURL,
