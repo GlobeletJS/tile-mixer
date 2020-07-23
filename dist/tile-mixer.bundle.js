@@ -436,7 +436,7 @@ function initDataPrep(styles, context) {
   return function (source, zoom) {
     let { atlas, layers } = source;
 
-    prepTasks = Object.keys(layers)
+    const prepTasks = Object.keys(layers)
       .map(id => () => prepFunctions[id](layers[id], zoom));
 
     prepTasks.push(() => { source.atlas = loadAtlas(atlas); });
@@ -3413,7 +3413,7 @@ function initSourceProcessor({ styles, glyphEndpoint }) {
 }
 
 function initProcessor(style) {
-  const { type, interactive } = style;
+  const { id, type, interactive } = style;
 
   const process =
     (type === "symbol") ? initShaping(style)
@@ -3812,7 +3812,7 @@ function sendTile(id, tile) {
 
   // Get a list of all the Transferable objects
   const transferables = Object.values(tile.layers)
-    .flatMap(features => features.map(getFeatureBuffers));
+    .flatMap(features => features.flatMap(getFeatureBuffers));
   transferables.push(tile.atlas.data.buffer);
 
   postMessage({ id, type: "data", payload: tile }, transferables);

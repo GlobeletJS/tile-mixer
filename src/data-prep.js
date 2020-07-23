@@ -27,7 +27,7 @@ export function initDataPrep(styles, context) {
   return function (source, zoom) {
     let { atlas, layers } = source;
 
-    prepTasks = Object.keys(layers)
+    const prepTasks = Object.keys(layers)
       .map(id => () => prepFunctions[id](layers[id], zoom));
 
     prepTasks.push(() => { source.atlas = loadAtlas(atlas); });

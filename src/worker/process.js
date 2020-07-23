@@ -33,7 +33,7 @@ export function initSourceProcessor({ styles, glyphEndpoint }) {
 }
 
 function initProcessor(style) {
-  const { type, interactive } = style;
+  const { id, type, interactive } = style;
 
   const process =
     (type === "symbol") ? initShaping(style)
