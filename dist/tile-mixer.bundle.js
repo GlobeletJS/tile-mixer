@@ -2231,7 +2231,7 @@ function initGlyphs({ parsedStyles, glyphEndpoint }) {
 
   return function(symbolLayers, zoom) {
     const fonts = symbolLayers
-      .forEach(l => textGetters[l.id](l.features, zoom))
+      .map(l => textGetters[l.id](l, zoom))
       .reduce(collectCharCodes, {});
 
     return getAtlas(fonts);
@@ -2245,13 +2245,14 @@ function collectCharCodes(fonts, layer) {
     let codes = f.labelText.split("").map(c => c.charCodeAt(0));
     codes.forEach(font.add, font);
   });
+  return fonts;
 }
 
 function initTextGetter(style) {
   const layout = style.layout;
 
-  return function(features, zoom) {
-    features.forEach(feature => {
+  return function(layer, zoom) {
+    layer.features.forEach(feature => {
       const textField = layout["text-field"](zoom, feature);
       const text = getTokenParser(textField)(feature.properties);
       if (!text) return;
@@ -2262,6 +2263,7 @@ function initTextGetter(style) {
       feature.labelText = getTextTransform(transformCode)(text);
       feature.font = layout["text-font"](zoom, feature);
     });
+    return layer;
   }
 }
 
