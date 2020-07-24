@@ -2,7 +2,7 @@ export function initAtlasLoader(context) {
   const { gl } = context;
 
   return function(atlas) {
-    let { width, height, data } = atlas;
+    const { width, height, data } = atlas;
 
     const target = gl.TEXTURE_2D;
     const texture = gl.createTexture();

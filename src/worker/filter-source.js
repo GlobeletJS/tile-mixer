@@ -44,6 +44,8 @@ function getGeomFilter(type) {
       return ["!=", "$type", "Point"]; // Could be LineString or Polygon
     case "fill":
       return ["==", "$type", "Polygon"];
+    case "symbol":
+      return ["==", "$type", "Point"]; // TODO: implement line geom labels
     default:
       return; // No condition on geometry
   }

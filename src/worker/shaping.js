@@ -42,16 +42,16 @@ export function initShaping(style) {
 
     // 5. Compute top left corners of the glyphs in each line
     const deltas = lines
-      .flatMap((l, i) => layoutLine(l, lineOrigins[i], spacing))
+      .flatMap((l, i) => layoutLine(l, lineOrigins[i], spacing));
 
     // 6. Fill in label origins for each glyph. TODO: assumes Point geometry
     const origin = feature.geometry.coordinates.slice();
     const origins = lines.flat()
-      .flatMap(g => origin)
+      .flatMap(g => origin);
 
     // 7. Collect all the glyph rects
     const rects = lines.flat()
-      .flatMap(g => Object.values(g.rect))
+      .flatMap(g => Object.values(g.rect));
 
     // 8. Adjust bounding box for collision checks
     const textPadding = layout["text-padding"](zoom, feature);
