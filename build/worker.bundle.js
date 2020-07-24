@@ -2907,26 +2907,21 @@ function initFeature(template, renderProperties) {
 }
 
 function appendBuffers(buffers, newBuffers) {
-  Object.keys(buffers).forEach(key => {
-    if (key === "indices") {
-      let indexShift = buffers.vertices.length / 2;
-      let shifted = newBuffers[key].map(i => i + indexShift);
-      buffers[key].push(...shifted);
-    } else {
-      buffers[key].push(...newBuffers[key]);
-    }
-  });
+  const appendix = Object.assign({}, newBuffers);
+  if (buffers.indices) {
+    let indexShift = buffers.vertices.length / 2;
+    appendix.indices = newBuffers.indices.map(i => i + indexShift);
+  }
+  Object.keys(buffers).forEach(k => buffers[k].push(...appendix[k]));
 }
 
 function makeTypedArrays(feature) {
   const { properties, buffers } = feature;
   // Note: modifying in place!
   Object.keys(buffers).forEach(key => {
-    if (key === "indices") {
-      buffers[key] = new Uint16Array(buffers[key]);
-    } else {
-      buffers[key] = new Float32Array(buffers[key]);
-    }
+    buffers[key] = (key === "indices")
+      ? new Uint16Array(buffers[key])
+      : new Float32Array(buffers[key]);
   });
   return feature;
 }
