@@ -81,9 +81,8 @@ function initFeatureValGetter(key) {
 function initSourceFilter(styles) {
   const filters = styles.map(initLayerFilter);
 
-  return function(source, zoom) {
-    return filters.map(filter => filter(source, zoom))
-      .filter(data => data !== undefined);
+  return function(source, z) {
+    return filters.reduce((d, f) => Object.assign(d, f(source, z)), {});
   };
 }
 
@@ -104,7 +103,7 @@ function initLayerFilter(style) {
     if (!layer) return;
 
     let features = layer.features.filter(parsedFilter);
-    if (features.length > 0) return { id, type, features };
+    if (features.length > 0) return { [id]: features };
   };
 }
 
@@ -1771,35 +1770,36 @@ function initGetter(urlTemplate, key) {
 }
 
 function initGlyphs({ parsedStyles, glyphEndpoint }) {
-  const textGetters = parsedStyles.filter(s => s.type === "symbol")
+  const textGetters = parsedStyles
     .reduce((d, s) => (d[s.id] = initTextGetter(s), d), {});
 
   const getAtlas = initGetter(glyphEndpoint);
 
-  return function(symbolLayers, zoom) {
-    const fonts = symbolLayers
-      .map(l => textGetters[l.id](l, zoom))
+  return function(layers, zoom) {
+    const fonts = Object.entries(layers)
+      .map(([id, features]) => textGetters[id](features, zoom))
       .reduce(collectCharCodes, {});
 
     return getAtlas(fonts);
   };
 }
 
-function collectCharCodes(fonts, layer) {
-  let features = layer.features.filter(f => f.labelText !== undefined);
-  features.forEach(f => {
-    let font = fonts[f.font] || (fonts[f.font] = new Set());
-    let codes = f.labelText.split("").map(c => c.charCodeAt(0));
-    codes.forEach(font.add, font);
-  });
+function collectCharCodes(fonts, features) {
+  features.filter(f => f.labelText !== undefined)
+    .forEach(f => {
+      let font = fonts[f.font] || (fonts[f.font] = new Set());
+      let codes = f.labelText.split("").map(c => c.charCodeAt(0));
+      codes.forEach(font.add, font);
+    });
   return fonts;
 }
 
 function initTextGetter(style) {
-  const layout = style.layout;
+  const { type, layout } = style;
+  if (type !== "symbol") return () => [];
 
-  return function(layer, zoom) {
-    layer.features.forEach(feature => {
+  return function(features, zoom) {
+    features.forEach(feature => {
       const textField = layout["text-field"](zoom, feature);
       const text = getTokenParser(textField)(feature.properties);
       if (!text) return;
@@ -1810,7 +1810,7 @@ function initTextGetter(style) {
       feature.labelText = getTextTransform(transformCode)(text);
       feature.font = layout["text-font"](zoom, feature);
     });
-    return layer;
+    return features;
   }
 }
 
@@ -2938,12 +2938,13 @@ function initSourceProcessor({ styles, glyphEndpoint }) {
 
   return function(source, zoom) {
     const rawLayers = sourceFilter(source, zoom);
-    const symbolLayers = rawLayers.filter(l => l.type === "symbol");
 
-    return getGlyphs(symbolLayers, zoom).then(atlas => {
-      const processed = rawLayers
-        .map(l => processors[l.id](l, zoom, atlas))
-        .reduce((d, l) => (d[l.id] = l.features, d), {});
+    return getGlyphs(rawLayers, zoom).then(atlas => {
+      const processed = Object.entries(rawLayers)
+        .reduce((dict, [id, features]) => {
+          dict[id] = processors[id](features, zoom, atlas);
+          return dict;
+        }, {});
 
       // TODO: compute symbol collisions...
 
@@ -2955,7 +2956,7 @@ function initSourceProcessor({ styles, glyphEndpoint }) {
 }
 
 function initProcessor(style) {
-  const { id, type, interactive } = style;
+  const { id, type, interactive } = style; // TODO: handle interactive layers
 
   const process =
     (type === "symbol") ? initShaping(style)
@@ -2965,10 +2966,9 @@ function initProcessor(style) {
 
   const compress = initFeatureGrouper(style);
 
-  return function(layer, zoom, atlas) {
-    let processed = layer.features.map(f => process(f, zoom, atlas));
-    //if (!interactive) delete layer.features;
-    return { id, features: compress(processed) };
+  return function(features, zoom, atlas) {
+    let processed = features.map(f => process(f, zoom, atlas));
+    return compress(processed);
   };
 }
 

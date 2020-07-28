@@ -2,35 +2,36 @@ import { getTokenParser } from "./tokens.js";
 import * as sdfManager from 'sdf-manager';
 
 export function initGlyphs({ parsedStyles, glyphEndpoint }) {
-  const textGetters = parsedStyles.filter(s => s.type === "symbol")
+  const textGetters = parsedStyles
     .reduce((d, s) => (d[s.id] = initTextGetter(s), d), {});
 
   const getAtlas = sdfManager.initGetter(glyphEndpoint);
 
-  return function(symbolLayers, zoom) {
-    const fonts = symbolLayers
-      .map(l => textGetters[l.id](l, zoom))
+  return function(layers, zoom) {
+    const fonts = Object.entries(layers)
+      .map(([id, features]) => textGetters[id](features, zoom))
       .reduce(collectCharCodes, {});
 
     return getAtlas(fonts);
   };
 }
 
-function collectCharCodes(fonts, layer) {
-  let features = layer.features.filter(f => f.labelText !== undefined);
-  features.forEach(f => {
-    let font = fonts[f.font] || (fonts[f.font] = new Set());
-    let codes = f.labelText.split("").map(c => c.charCodeAt(0));
-    codes.forEach(font.add, font);
-  });
+function collectCharCodes(fonts, features) {
+  features.filter(f => f.labelText !== undefined)
+    .forEach(f => {
+      let font = fonts[f.font] || (fonts[f.font] = new Set());
+      let codes = f.labelText.split("").map(c => c.charCodeAt(0));
+      codes.forEach(font.add, font);
+    });
   return fonts;
 }
 
 function initTextGetter(style) {
-  const layout = style.layout;
+  const { type, layout } = style;
+  if (type !== "symbol") return () => [];
 
-  return function(layer, zoom) {
-    layer.features.forEach(feature => {
+  return function(features, zoom) {
+    features.forEach(feature => {
       const textField = layout["text-field"](zoom, feature);
       const text = getTokenParser(textField)(feature.properties);
       if (!text) return;
@@ -41,7 +42,7 @@ function initTextGetter(style) {
       feature.labelText = getTextTransform(transformCode)(text);
       feature.font = layout["text-font"](zoom, feature);
     });
-    return layer;
+    return features;
   }
 }
 

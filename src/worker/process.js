@@ -16,12 +16,13 @@ export function initSourceProcessor({ styles, glyphEndpoint }) {
 
   return function(source, zoom) {
     const rawLayers = sourceFilter(source, zoom);
-    const symbolLayers = rawLayers.filter(l => l.type === "symbol");
 
-    return getGlyphs(symbolLayers, zoom).then(atlas => {
-      const processed = rawLayers
-        .map(l => processors[l.id](l, zoom, atlas))
-        .reduce((d, l) => (d[l.id] = l.features, d), {});
+    return getGlyphs(rawLayers, zoom).then(atlas => {
+      const processed = Object.entries(rawLayers)
+        .reduce((dict, [id, features]) => {
+          dict[id] = processors[id](features, zoom, atlas);
+          return dict;
+        }, {});
 
       // TODO: compute symbol collisions...
 
@@ -33,7 +34,7 @@ export function initSourceProcessor({ styles, glyphEndpoint }) {
 }
 
 function initProcessor(style) {
-  const { id, type, interactive } = style;
+  const { id, type, interactive } = style; // TODO: handle interactive layers
 
   const process =
     (type === "symbol") ? initShaping(style)
@@ -43,9 +44,8 @@ function initProcessor(style) {
 
   const compress = initFeatureGrouper(style);
 
-  return function(layer, zoom, atlas) {
-    let processed = layer.features.map(f => process(f, zoom, atlas));
-    //if (!interactive) delete layer.features;
-    return { id, features: compress(processed) };
+  return function(features, zoom, atlas) {
+    let processed = features.map(f => process(f, zoom, atlas));
+    return compress(processed);
   };
 }

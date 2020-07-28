@@ -3,9 +3,8 @@ import { buildFeatureFilter } from "./filter-feature.js";
 export function initSourceFilter(styles) {
   const filters = styles.map(initLayerFilter);
 
-  return function(source, zoom) {
-    return filters.map(filter => filter(source, zoom))
-      .filter(data => data !== undefined);
+  return function(source, z) {
+    return filters.reduce((d, f) => Object.assign(d, f(source, z)), {});
   };
 }
 
@@ -26,7 +25,7 @@ function initLayerFilter(style) {
     if (!layer) return;
 
     let features = layer.features.filter(parsedFilter);
-    if (features.length > 0) return { id, type, features };
+    if (features.length > 0) return { [id]: features };
   };
 }
 
