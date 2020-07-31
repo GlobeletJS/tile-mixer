@@ -1,7 +1,6 @@
-import { initSourceFilter } from "./filter-source.js";
 import { getStyleFuncs } from 'tile-stencil';
-import { initGlyphs } from "./glyphs.js";
-import { initShaping } from "./shaping.js";
+import { initSourceFilter } from "./filter-source.js";
+import { initSymbols } from "./symbol.js";
 import { triangulate } from "./fill.js";
 import { parseLine } from "./line.js";
 import { initFeatureGrouper } from "./group-features.js";
@@ -10,42 +9,51 @@ export function initSourceProcessor({ styles, glyphEndpoint }) {
   const parsedStyles = styles.map(getStyleFuncs);
 
   const sourceFilter = initSourceFilter(parsedStyles);
-  const getGlyphs = initGlyphs({ parsedStyles, glyphEndpoint });
-  const processors = parsedStyles
-    .reduce((d, s) => (d[s.id] = initProcessor(s), d), {});
+  const process = initProcessor(parsedStyles);
+  const processSymbols = initSymbols({ parsedStyles, glyphEndpoint });
+  const compressors = parsedStyles
+    .reduce((d, s) => (d[s.id] = initFeatureGrouper(s), d), {});
 
   return function(source, zoom) {
     const rawLayers = sourceFilter(source, zoom);
 
-    return getGlyphs(rawLayers, zoom).then(atlas => {
-      const processed = Object.entries(rawLayers)
-        .reduce((dict, [id, features]) => {
-          dict[id] = processors[id](features, zoom, atlas);
-          return dict;
-        }, {});
+    const mainTask = process(rawLayers);
+    const symbolTask = processSymbols(rawLayers, zoom);
 
-      // TODO: compute symbol collisions...
-
+    return Promise.all([mainTask, symbolTask]).then(([layers, symbols]) => {
+      // Merge symbol layers into layers dictionary
+      Object.assign(layers, symbols.layers);
+      // Compress features
+      Object.entries(layers).forEach(([id, features]) => {
+        layers[id] = compressors[id](features);
+      });
       // TODO: what if there is no atlas?
       // Note: atlas.data.buffer is a Transferable
-      return { atlas: atlas.image, layers: processed };
+      return { atlas: symbols.atlas, layers };
     });
   };
 }
 
-function initProcessor(style) {
-  const { id, type, interactive } = style; // TODO: handle interactive layers
+function initProcessor(styles) {
+  const transforms = styles.reduce((dict, style) => {
+    let { id, type } = style;
 
-  const process =
-    (type === "symbol") ? initShaping(style)
-    : (type === "fill") ? triangulate
-    : (type === "line") ? parseLine
-    : f => f; // TODO: handle circle layers
+    dict[id] =
+      (type === "circle") ? null // TODO
+      : (type === "line") ? parseLine
+      : (type === "fill") ? triangulate
+      : null;
 
-  const compress = initFeatureGrouper(style);
+    return dict;
+  }, {});
 
-  return function(features, zoom, atlas) {
-    let processed = features.map(f => process(f, zoom, atlas));
-    return compress(processed);
-  };
+  return function(layers) {
+    const data = Object.entries(layers).reduce((d, [id, features]) => {
+      let transform = transforms[id];
+      if (transform) d[id] = features.map(transform);
+      return d;
+    }, {});
+
+    return Promise.resolve(data);
+  }
 }

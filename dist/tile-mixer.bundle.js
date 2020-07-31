@@ -453,137 +453,7 @@ function makePathAdder(pathFunc) {
   });
 }
 
-var workerCode = String.raw`function buildFeatureFilter(filterObj) {
-  // filterObj is a filter definition following the "deprecated" syntax:
-  // https://docs.mapbox.com/mapbox-gl-js/style-spec/#other-filter
-  if (!filterObj) return () => true;
-  const [type, ...vals] = filterObj;
-
-  // If this is a combined filter, the vals are themselves filter definitions
-  switch (type) {
-    case "all": {
-      let filters = vals.map(buildFeatureFilter);  // Iteratively recursive!
-      return (d) => filters.every( filt => filt(d) );
-    }
-    case "any": {
-      let filters = vals.map(buildFeatureFilter);
-      return (d) => filters.some( filt => filt(d) );
-    }
-    case "none": {
-      let filters = vals.map(buildFeatureFilter);
-      return (d) => filters.every( filt => !filt(d) );
-    }
-    default:
-      return getSimpleFilter(filterObj);
-  }
-}
-
-function getSimpleFilter(filterObj) {
-  const [type, key, ...vals] = filterObj;
-  const getVal = initFeatureValGetter(key);
-
-  switch (type) {
-    // Existential Filters
-    case "has": 
-      return d => !!getVal(d); // !! forces a Boolean return
-    case "!has": 
-      return d => !getVal(d);
-
-    // Comparison Filters
-    case "==": 
-      return d => getVal(d) === vals[0];
-    case "!=":
-      return d => getVal(d) !== vals[0];
-    case ">":
-      return d => getVal(d) > vals[0];
-    case ">=":
-      return d => getVal(d) >= vals[0];
-    case "<":
-      return d => getVal(d) < vals[0];
-    case "<=":
-      return d => getVal(d) <= vals[0];
-
-    // Set Membership Filters
-    case "in" :
-      return d => vals.includes( getVal(d) );
-    case "!in" :
-      return d => !vals.includes( getVal(d) );
-    default:
-      console.log("prepFilter: unknown filter type = " + filterObj[0]);
-  }
-  // No recognizable filter criteria. Return a filter that is always true
-  return () => true;
-}
-
-function initFeatureValGetter(key) {
-  switch (key) {
-    case "$type":
-      // NOTE: data includes MultiLineString, MultiPolygon, etc-NOT IN SPEC
-      return f => {
-        let t = f.geometry.type;
-        if (t === "MultiPoint") return "Point";
-        if (t === "MultiLineString") return "LineString";
-        if (t === "MultiPolygon") return "Polygon";
-        return t;
-      };
-    case "$id":
-      return f => f.id;
-    default:
-      return f => f.properties[key];
-  }
-}
-
-function initSourceFilter(styles) {
-  const filters = styles.map(initLayerFilter);
-
-  return function(source, z) {
-    return filters.reduce((d, f) => Object.assign(d, f(source, z)), {});
-  };
-}
-
-function initLayerFilter(style) {
-  const { id, type, filter,
-    minzoom = 0, maxzoom = 99,
-    "source-layer": sourceLayer,
-  } = style;
-
-  const filterObject = composeFilters(getGeomFilter(type), filter);
-  const parsedFilter = buildFeatureFilter(filterObject);
-
-  return function(source, zoom) {
-    // source is a dictionary of FeatureCollections, keyed on source-layer
-    if (!source || zoom < minzoom || maxzoom < zoom) return;
-
-    let layer = source[sourceLayer];
-    if (!layer) return;
-
-    let features = layer.features.filter(parsedFilter);
-    if (features.length > 0) return { [id]: features };
-  };
-}
-
-function composeFilters(filter1, filter2) {
-  if (!filter1) return filter2;
-  if (!filter2) return filter1;
-  return ["all", filter1, filter2];
-}
-
-function getGeomFilter(type) {
-  switch (type) {
-    case "circle":
-      return ["==", "$type", "Point"];
-    case "line":
-      return ["!=", "$type", "Point"]; // Could be LineString or Polygon
-    case "fill":
-      return ["==", "$type", "Polygon"];
-    case "symbol":
-      return ["==", "$type", "Point"]; // TODO: implement line geom labels
-    default:
-      return; // No condition on geometry
-  }
-}
-
-function createCommonjsModule(fn, module) {
+var workerCode = String.raw`function createCommonjsModule(fn, module) {
 	return module = { exports: {} }, fn(module, module.exports), module.exports;
 }
 
@@ -1093,6 +963,136 @@ function getStyleFuncs(inputLayer) {
   layer.paint  = autoGetters(layer.paint,  paintDefaults[layer.type] );
 
   return layer;
+}
+
+function buildFeatureFilter(filterObj) {
+  // filterObj is a filter definition following the "deprecated" syntax:
+  // https://docs.mapbox.com/mapbox-gl-js/style-spec/#other-filter
+  if (!filterObj) return () => true;
+  const [type, ...vals] = filterObj;
+
+  // If this is a combined filter, the vals are themselves filter definitions
+  switch (type) {
+    case "all": {
+      let filters = vals.map(buildFeatureFilter);  // Iteratively recursive!
+      return (d) => filters.every( filt => filt(d) );
+    }
+    case "any": {
+      let filters = vals.map(buildFeatureFilter);
+      return (d) => filters.some( filt => filt(d) );
+    }
+    case "none": {
+      let filters = vals.map(buildFeatureFilter);
+      return (d) => filters.every( filt => !filt(d) );
+    }
+    default:
+      return getSimpleFilter(filterObj);
+  }
+}
+
+function getSimpleFilter(filterObj) {
+  const [type, key, ...vals] = filterObj;
+  const getVal = initFeatureValGetter(key);
+
+  switch (type) {
+    // Existential Filters
+    case "has": 
+      return d => !!getVal(d); // !! forces a Boolean return
+    case "!has": 
+      return d => !getVal(d);
+
+    // Comparison Filters
+    case "==": 
+      return d => getVal(d) === vals[0];
+    case "!=":
+      return d => getVal(d) !== vals[0];
+    case ">":
+      return d => getVal(d) > vals[0];
+    case ">=":
+      return d => getVal(d) >= vals[0];
+    case "<":
+      return d => getVal(d) < vals[0];
+    case "<=":
+      return d => getVal(d) <= vals[0];
+
+    // Set Membership Filters
+    case "in" :
+      return d => vals.includes( getVal(d) );
+    case "!in" :
+      return d => !vals.includes( getVal(d) );
+    default:
+      console.log("prepFilter: unknown filter type = " + filterObj[0]);
+  }
+  // No recognizable filter criteria. Return a filter that is always true
+  return () => true;
+}
+
+function initFeatureValGetter(key) {
+  switch (key) {
+    case "$type":
+      // NOTE: data includes MultiLineString, MultiPolygon, etc-NOT IN SPEC
+      return f => {
+        let t = f.geometry.type;
+        if (t === "MultiPoint") return "Point";
+        if (t === "MultiLineString") return "LineString";
+        if (t === "MultiPolygon") return "Polygon";
+        return t;
+      };
+    case "$id":
+      return f => f.id;
+    default:
+      return f => f.properties[key];
+  }
+}
+
+function initSourceFilter(styles) {
+  const filters = styles.map(initLayerFilter);
+
+  return function(source, z) {
+    return filters.reduce((d, f) => Object.assign(d, f(source, z)), {});
+  };
+}
+
+function initLayerFilter(style) {
+  const { id, type, filter,
+    minzoom = 0, maxzoom = 99,
+    "source-layer": sourceLayer,
+  } = style;
+
+  const filterObject = composeFilters(getGeomFilter(type), filter);
+  const parsedFilter = buildFeatureFilter(filterObject);
+
+  return function(source, zoom) {
+    // source is a dictionary of FeatureCollections, keyed on source-layer
+    if (!source || zoom < minzoom || maxzoom < zoom) return;
+
+    let layer = source[sourceLayer];
+    if (!layer) return;
+
+    let features = layer.features.filter(parsedFilter);
+    if (features.length > 0) return { [id]: features };
+  };
+}
+
+function composeFilters(filter1, filter2) {
+  if (!filter1) return filter2;
+  if (!filter2) return filter1;
+  return ["all", filter1, filter2];
+}
+
+function getGeomFilter(type) {
+  switch (type) {
+    case "circle":
+      return ["==", "$type", "Point"];
+    case "line":
+      return ["!=", "$type", "Point"]; // Could be LineString or Polygon
+    case "fill":
+      return ["==", "$type", "Polygon"];
+    case "symbol":
+      return ["==", "$type", "Point"]; // TODO: implement line geom labels
+    default:
+      return; // No condition on geometry
+  }
 }
 
 function getTokenParser(tokenText) {
@@ -2571,6 +2571,30 @@ function measureLine(glyphs, spacing) {
     .reduce((a, c) => a + c + spacing);
 }
 
+function initSymbols({ parsedStyles, glyphEndpoint }) {
+  const getGlyphs = initGlyphs({ parsedStyles, glyphEndpoint });
+
+  const shapers = parsedStyles.reduce((dict, style) => {
+    let { id, type } = style;
+    if (type === "symbol") dict[id] = initShaping(style);
+    return dict;
+  }, {});
+
+  return function(layers, zoom) {
+    return getGlyphs(layers, zoom).then(atlas => {
+      const shaped = Object.entries(layers).reduce((d, [id, features]) => {
+        // TODO: if getGlyphs or a previous step drops the non-symbol layers,
+        // then we can drop the if below
+        let shaper = shapers[id];
+        if (shaper) d[id] = features.map(f => shaper(f, zoom, atlas));
+        return d;
+      }, {});
+
+      return { atlas: atlas.image, layers: shaped };
+    });
+  };
+}
+
 var earcut_1 = earcut;
 var default_1 = earcut;
 
@@ -3387,44 +3411,53 @@ function initSourceProcessor({ styles, glyphEndpoint }) {
   const parsedStyles = styles.map(getStyleFuncs);
 
   const sourceFilter = initSourceFilter(parsedStyles);
-  const getGlyphs = initGlyphs({ parsedStyles, glyphEndpoint });
-  const processors = parsedStyles
-    .reduce((d, s) => (d[s.id] = initProcessor(s), d), {});
+  const process = initProcessor(parsedStyles);
+  const processSymbols = initSymbols({ parsedStyles, glyphEndpoint });
+  const compressors = parsedStyles
+    .reduce((d, s) => (d[s.id] = initFeatureGrouper(s), d), {});
 
   return function(source, zoom) {
     const rawLayers = sourceFilter(source, zoom);
 
-    return getGlyphs(rawLayers, zoom).then(atlas => {
-      const processed = Object.entries(rawLayers)
-        .reduce((dict, [id, features]) => {
-          dict[id] = processors[id](features, zoom, atlas);
-          return dict;
-        }, {});
+    const mainTask = process(rawLayers);
+    const symbolTask = processSymbols(rawLayers, zoom);
 
-      // TODO: compute symbol collisions...
-
+    return Promise.all([mainTask, symbolTask]).then(([layers, symbols]) => {
+      // Merge symbol layers into layers dictionary
+      Object.assign(layers, symbols.layers);
+      // Compress features
+      Object.entries(layers).forEach(([id, features]) => {
+        layers[id] = compressors[id](features);
+      });
       // TODO: what if there is no atlas?
       // Note: atlas.data.buffer is a Transferable
-      return { atlas: atlas.image, layers: processed };
+      return { atlas: symbols.atlas, layers };
     });
   };
 }
 
-function initProcessor(style) {
-  const { id, type, interactive } = style; // TODO: handle interactive layers
+function initProcessor(styles) {
+  const transforms = styles.reduce((dict, style) => {
+    let { id, type } = style;
 
-  const process =
-    (type === "symbol") ? initShaping(style)
-    : (type === "fill") ? triangulate
-    : (type === "line") ? parseLine
-    : f => f; // TODO: handle circle layers
+    dict[id] =
+      (type === "circle") ? null // TODO
+      : (type === "line") ? parseLine
+      : (type === "fill") ? triangulate
+      : null;
 
-  const compress = initFeatureGrouper(style);
+    return dict;
+  }, {});
 
-  return function(features, zoom, atlas) {
-    let processed = features.map(f => process(f, zoom, atlas));
-    return compress(processed);
-  };
+  return function(layers) {
+    const data = Object.entries(layers).reduce((d, [id, features]) => {
+      let transform = transforms[id];
+      if (transform) d[id] = features.map(transform);
+      return d;
+    }, {});
+
+    return Promise.resolve(data);
+  }
 }
 
 function classifyRings(rings) {
