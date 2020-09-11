@@ -39,7 +39,8 @@
     "earcut": "^2.2.2",
     "pbf": "^3.2.1",
     "tile-labeler": "0.0.6",
-    "tile-stencil": "^0.2.3",
-    "vector-tile-esm": "^2.1.1"
+    "tile-stencil": "https://github.com/GlobeletJS/tile-stencil#geojson",
+    "vector-tile-esm": "^2.1.1",
+    "geojson-vt": "^3.2.1"
   }
 }

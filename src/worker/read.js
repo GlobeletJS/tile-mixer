@@ -51,3 +51,69 @@ function xhrGet(href, type, callback) {
 
   return req; // Request can be aborted via req.abort()
 }
+
+export function readGeojsonVT(index, layerID, x, y, z, size, callback){
+  function request(){
+    const tile = index.getTile(z,x,y);
+    console.log("tile: "+JSON.stringify(tile));
+    var jsonTile = [];
+    if (tile && tile !== "null" && tile !== "undefined" && tile.features.length > 0) {
+      for (let i = 0; i < tile.features.length; i++) {
+        jsonTile[i] = geojsonvtToJSON(tile.features[i]);
+      }
+    }
+    var jsonLayer = {};
+    jsonLayer[layerID] =  {"type": "FeatureCollection", "features": jsonTile};
+    console.log("jsonLayer: "+ JSON.stringify(jsonLayer));
+
+    const errMsg =
+      "ERROR in GeojsonLoader for tile z,x,y = " + [z, x, y].join(",");
+    if (tile && tile !== "null" && tile !== "undefined" && tile.features.length > 0) {
+      callback(null, jsonLayer);
+    } else {
+      callback(errMsg);
+    }
+    function abort() {
+      callback(errMsg);
+    }
+    return { abort };
+  }
+  return { request };
+}
+
+function geojsonvtToJSON (value){
+  //http://www.scgis.net/api/ol/v4.1.1/examples/geojson-vt.html
+  if (value.geometry) {
+    var type;
+    var rawType = value.type;
+    var geometry = value.geometry;
+
+    if (rawType === 1) {
+      type = geometry.length === 1 ? 'Point' : 'MultiPoint';
+    } else if (rawType === 2) {
+      type = geometry.length === 1 ? 'LineString' : 'MultiLineString';
+    } else if (rawType === 3) {
+      type = geometry.length === 1 ? 'Polygon' : 'MultiPolygon';
+    }
+
+    if (rawType === 1) {
+      return {
+        geometry: {
+          type: type,
+          coordinates: geometry.length == 1 ? geometry[0] : [geometry]
+        },
+        properties: value.tags
+      };
+    } else {
+      return {
+        geometry: {
+          type: type,
+          coordinates: geometry.length == 1 ? geometry : [geometry]
+        },
+        properties: value.tags
+      };
+    }
+  } else {
+    return value;
+  }
+}

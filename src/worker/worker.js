@@ -1,5 +1,7 @@
 import { initSourceProcessor } from "./process.js";
 import { readMVT } from "./read.js";
+import { readGeojsonVT } from "./read.js";
+import geojsonvt from 'geojson-vt';
 
 const tasks = {};
 var filter = (data) => data;
@@ -17,7 +19,16 @@ onmessage = function(msgEvent) {
       break;
     case "start":
       let callback = (err, result) => process(id, err, result, payload.zoom);
-      let request  = readMVT(payload.href, payload.size, callback);
+      let request;
+      if(payload.type === "vector"){
+        request = readMVT(payload.href, payload.size, callback);
+      }
+      if(payload.type === "geojson"){
+        console.log("payload source:"+ JSON.stringify(payload.source));
+        var tileIndex = geojsonvt({"type":"FeatureCollection", "features":payload.source.features}, {extent: 512});
+        console.log("Index: "+ JSON.stringify(tileIndex.getTile(0,0,0)));
+        request = readGeojsonVT(tileIndex, payload.layerID, payload.tileX, payload.tileY, payload.zoom, payload.size, callback);
+      }
       tasks[id] = { request, status: "requested" };
       break;
     case "cancel":

@@ -24,17 +24,30 @@ export function setParams(userParams) {
 
   // Construct function to get a tile URL
   if (!source) fail("parameters.source is required!");
-  const getURL = initUrlFunc(source.tiles);
+  if(source.type === "vector"){
+    const getURL = initUrlFunc(source.tiles);
 
-  return {
-    context,
-    threads,
-    glyphs,
-    getURL,
-    layers,
-    queue,
-    verbose,
-  };
+    return {
+      context,
+      threads,
+      glyphs,
+      getURL,
+      layers,
+      queue,
+      verbose,
+    };
+  }
+  if(source.type === "geojson"){
+    return {
+      context,
+      threads,
+      glyphs,
+      getURL,
+      layers,
+      queue,
+      verbose,
+    };
+  }
 }
 
 function initUrlFunc(endpoints) {
