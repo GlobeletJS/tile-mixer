@@ -137,7 +137,6 @@ function setParams(userParams) {
       context,
       threads,
       glyphs,
-      getURL,
       layers,
       queue,
       verbose,
@@ -5317,9 +5316,12 @@ function xhrGet(href, type, callback) {
   return req; // Request can be aborted via req.abort()
 }
 
-function readGeojsonVT(index, layerID, x, y, z, size, callback){
-  function request(){
-    const tile = index.getTile(z,x,y);
+function readGeojsonVT(index, layerID, x, y, z, callback){
+  console.log("inside readGeojsonVT");
+  return { req }; //return a function which returns callback(null, data)
+
+  function req(){
+    var tile = index.getTile(z,x,y);
     console.log("tile: "+JSON.stringify(tile));
     var jsonTile = [];
     if (tile && tile !== "null" && tile !== "undefined" && tile.features.length > 0) {
@@ -5338,12 +5340,11 @@ function readGeojsonVT(index, layerID, x, y, z, size, callback){
     } else {
       callback(errMsg);
     }
-    function abort() {
-      callback(errMsg);
-    }
-    return { abort };
+    //function abort() {
+     // callback(errMsg);
+    //}
+    //return { abort };
   }
-  return { request };
 }
 
 function geojsonvtToJSON (value){
@@ -6292,7 +6293,7 @@ onmessage = function(msgEvent) {
         console.log("payload source:"+ JSON.stringify(payload.source));
         var tileIndex = geojsonvt({"type":"FeatureCollection", "features":payload.source.features}, {extent: 512});
         console.log("Index: "+ JSON.stringify(tileIndex.getTile(0,0,0)));
-        request = readGeojsonVT(tileIndex, payload.layerID, payload.tileX, payload.tileY, payload.zoom, payload.size, callback);
+        request = readGeojsonVT(tileIndex, payload.layerID, payload.tileX, payload.tileY, payload.zoom, callback);
       }
       tasks[id] = { request, status: "requested" };
       break;

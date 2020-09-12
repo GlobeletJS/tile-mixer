@@ -52,9 +52,12 @@ function xhrGet(href, type, callback) {
   return req; // Request can be aborted via req.abort()
 }
 
-export function readGeojsonVT(index, layerID, x, y, z, size, callback){
-  function request(){
-    const tile = index.getTile(z,x,y);
+export function readGeojsonVT(index, layerID, x, y, z, callback){
+  console.log("inside readGeojsonVT");
+  return { req }; //return a function which returns callback(null, data)
+
+  function req(){
+    var tile = index.getTile(z,x,y);
     console.log("tile: "+JSON.stringify(tile));
     var jsonTile = [];
     if (tile && tile !== "null" && tile !== "undefined" && tile.features.length > 0) {
@@ -73,12 +76,11 @@ export function readGeojsonVT(index, layerID, x, y, z, size, callback){
     } else {
       callback(errMsg);
     }
-    function abort() {
-      callback(errMsg);
-    }
-    return { abort };
+    //function abort() {
+     // callback(errMsg);
+    //}
+    //return { abort };
   }
-  return { request };
 }
 
 function geojsonvtToJSON (value){

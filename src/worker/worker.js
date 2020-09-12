@@ -27,7 +27,7 @@ onmessage = function(msgEvent) {
         console.log("payload source:"+ JSON.stringify(payload.source));
         var tileIndex = geojsonvt({"type":"FeatureCollection", "features":payload.source.features}, {extent: 512});
         console.log("Index: "+ JSON.stringify(tileIndex.getTile(0,0,0)));
-        request = readGeojsonVT(tileIndex, payload.layerID, payload.tileX, payload.tileY, payload.zoom, payload.size, callback);
+        request = readGeojsonVT(tileIndex, payload.layerID, payload.tileX, payload.tileY, payload.zoom, callback);
       }
       tasks[id] = { request, status: "requested" };
       break;

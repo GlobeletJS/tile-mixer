@@ -42,7 +42,6 @@ export function setParams(userParams) {
       context,
       threads,
       glyphs,
-      getURL,
       layers,
       queue,
       verbose,
