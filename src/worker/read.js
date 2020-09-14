@@ -54,9 +54,9 @@ function xhrGet(href, type, callback) {
 
 export function readGeojsonVT(index, layerID, x, y, z, callback){
   console.log("inside readGeojsonVT");
-  return { req }; //return a function which returns callback(null, data)
+  //return { req }; //return a function which returns callback(null, data)
 
-  function req(){
+ // function req(){
     var tile = index.getTile(z,x,y);
     console.log("tile: "+JSON.stringify(tile));
     var jsonTile = [];
@@ -72,15 +72,15 @@ export function readGeojsonVT(index, layerID, x, y, z, callback){
     const errMsg =
       "ERROR in GeojsonLoader for tile z,x,y = " + [z, x, y].join(",");
     if (tile && tile !== "null" && tile !== "undefined" && tile.features.length > 0) {
-      callback(null, jsonLayer);
+      setTimeout(callback(null, jsonLayer), 0);
     } else {
-      callback(errMsg);
+      setTimeout(callback(errMsg), 0);
     }
-    //function abort() {
-     // callback(errMsg);
-    //}
-    //return { abort };
-  }
+    function abort() {
+      //callback(errMsg);
+    }
+  return { abort };
+  //}
 }
 
 function geojsonvtToJSON (value){

@@ -5,6 +5,7 @@ import geojsonvt from 'geojson-vt';
 
 const tasks = {};
 var filter = (data) => data;
+var tileIndex = {};
 
 onmessage = function(msgEvent) {
   // The message DATA as sent by the parent thread is now a property 
@@ -13,20 +14,21 @@ onmessage = function(msgEvent) {
   const { id, type, payload } = msgEvent.data;
 
   switch (type) {
-    case "styles":
+    case "setup":
       // NOTE: changing global variable!
       filter = initSourceProcessor(payload);
+      if(payload.type === "geojson"){
+        tileIndex = = geojsonvt({"type":"FeatureCollection", "features":payload.source.features}, {extent: 512});
+        console.log("Index: "+ JSON.stringify(tileIndex.getTile(0,0,0)));
+      }
       break;
-    case "start":
+    case "getTile":
       let callback = (err, result) => process(id, err, result, payload.zoom);
       let request;
       if(payload.type === "vector"){
         request = readMVT(payload.href, payload.size, callback);
       }
       if(payload.type === "geojson"){
-        console.log("payload source:"+ JSON.stringify(payload.source));
-        var tileIndex = geojsonvt({"type":"FeatureCollection", "features":payload.source.features}, {extent: 512});
-        console.log("Index: "+ JSON.stringify(tileIndex.getTile(0,0,0)));
         request = readGeojsonVT(tileIndex, payload.layerID, payload.tileX, payload.tileY, payload.zoom, callback);
       }
       tasks[id] = { request, status: "requested" };
