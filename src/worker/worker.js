@@ -18,7 +18,7 @@ onmessage = function(msgEvent) {
       // NOTE: changing global variable!
       filter = initSourceProcessor(payload);
       if(payload.type === "geojson"){
-        tileIndex = = geojsonvt({"type":"FeatureCollection", "features":payload.source.features}, {extent: 512});
+        tileIndex = geojsonvt({"type":"FeatureCollection", "features":payload.source.features}, {extent: 512});
         console.log("Index: "+ JSON.stringify(tileIndex.getTile(0,0,0)));
       }
       break;

@@ -4851,9 +4851,9 @@ function xhrGet(href, type, callback) {
 
 function readGeojsonVT(index, layerID, x, y, z, callback){
   console.log("inside readGeojsonVT");
-  return { req }; //return a function which returns callback(null, data)
+  //return { req }; //return a function which returns callback(null, data)
 
-  function req(){
+ // function req(){
     var tile = index.getTile(z,x,y);
     console.log("tile: "+JSON.stringify(tile));
     var jsonTile = [];
@@ -4869,15 +4869,15 @@ function readGeojsonVT(index, layerID, x, y, z, callback){
     const errMsg =
       "ERROR in GeojsonLoader for tile z,x,y = " + [z, x, y].join(",");
     if (tile && tile !== "null" && tile !== "undefined" && tile.features.length > 0) {
-      callback(null, jsonLayer);
+      setTimeout(callback(null, jsonLayer), 0);
     } else {
-      callback(errMsg);
+      setTimeout(callback(errMsg), 0);
     }
-    //function abort() {
-     // callback(errMsg);
-    //}
-    //return { abort };
-  }
+    function abort() {
+      //callback(errMsg);
+    }
+  return { abort };
+  //}
 }
 
 function geojsonvtToJSON (value){
@@ -5804,6 +5804,7 @@ function extend$2(dest, src) {
 
 const tasks = {};
 var filter = (data) => data;
+var tileIndex = {};
 
 onmessage = function(msgEvent) {
   // The message DATA as sent by the parent thread is now a property 
@@ -5812,20 +5813,21 @@ onmessage = function(msgEvent) {
   const { id, type, payload } = msgEvent.data;
 
   switch (type) {
-    case "styles":
+    case "setup":
       // NOTE: changing global variable!
       filter = initSourceProcessor(payload);
+      if(payload.type === "geojson"){
+        tileIndex = geojsonvt({"type":"FeatureCollection", "features":payload.source.features}, {extent: 512});
+        console.log("Index: "+ JSON.stringify(tileIndex.getTile(0,0,0)));
+      }
       break;
-    case "start":
+    case "getTile":
       let callback = (err, result) => process(id, err, result, payload.zoom);
       let request;
       if(payload.type === "vector"){
         request = readMVT(payload.href, payload.size, callback);
       }
       if(payload.type === "geojson"){
-        console.log("payload source:"+ JSON.stringify(payload.source));
-        var tileIndex = geojsonvt({"type":"FeatureCollection", "features":payload.source.features}, {extent: 512});
-        console.log("Index: "+ JSON.stringify(tileIndex.getTile(0,0,0)));
         request = readGeojsonVT(tileIndex, payload.layerID, payload.tileX, payload.tileY, payload.zoom, callback);
       }
       tasks[id] = { request, status: "requested" };
