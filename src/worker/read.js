@@ -53,34 +53,28 @@ function xhrGet(href, type, callback) {
 }
 
 export function readGeojsonVT(index, layerID, x, y, z, callback){
-  console.log("inside readGeojsonVT");
-  //return { req }; //return a function which returns callback(null, data)
 
- // function req(){
-    var tile = index.getTile(z,x,y);
-    console.log("tile: "+JSON.stringify(tile));
-    var jsonTile = [];
-    if (tile && tile !== "null" && tile !== "undefined" && tile.features.length > 0) {
-      for (let i = 0; i < tile.features.length; i++) {
-        jsonTile[i] = geojsonvtToJSON(tile.features[i]);
-      }
+  var tile = index.getTile(z,x,y);
+  var jsonTile = [];
+  if (tile && tile !== "null" && tile !== "undefined" && tile.features.length > 0) {
+    for (let i = 0; i < tile.features.length; i++) {
+      jsonTile[i] = geojsonvtToJSON(tile.features[i]);
     }
-    var jsonLayer = {};
-    jsonLayer[layerID] =  {"type": "FeatureCollection", "features": jsonTile};
-    console.log("jsonLayer: "+ JSON.stringify(jsonLayer));
+  }
+  var jsonLayer = {};
+  jsonLayer[layerID] =  {"type": "FeatureCollection", "features": jsonTile};
 
-    const errMsg =
-      "ERROR in GeojsonLoader for tile z,x,y = " + [z, x, y].join(",");
-    if (tile && tile !== "null" && tile !== "undefined" && tile.features.length > 0) {
-      setTimeout(callback(null, jsonLayer), 0);
-    } else {
-      setTimeout(callback(errMsg), 0);
-    }
-    function abort() {
-      //callback(errMsg);
-    }
+  const errMsg =
+    "ERROR in GeojsonLoader for tile z,x,y = " + [z, x, y].join(",");
+  if (jsonLayer[layerID].features.length > 0) {
+    setTimeout(() => callback(null, jsonLayer));
+  } else {
+    setTimeout(() => callback(errMsg));
+  }
+
+  function abort() {
+  }
   return { abort };
-  //}
 }
 
 function geojsonvtToJSON (value){

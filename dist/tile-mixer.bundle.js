@@ -138,6 +138,7 @@ function setParams(userParams) {
       threads,
       glyphs,
       layers,
+      source,
       queue,
       verbose,
     };
@@ -162,7 +163,7 @@ function fail(message) {
 }
 
 function initWorkers(codeHref, params) {
-  const { threads, glyphs, layers } = params;
+  const { threads, glyphs, layers, source } = params;
 
   const tasks = {};
   var msgId = 0;
@@ -170,7 +171,7 @@ function initWorkers(codeHref, params) {
   // Initialize the worker threads, and send them the styles
   function trainWorker() {
     const worker = new Worker(codeHref);
-    const payload = { styles: layers, glyphEndpoint: glyphs };
+    const payload = { styles: layers, glyphEndpoint: glyphs, source: source };
     worker.postMessage({ id: 0, type: "setup", payload });
     worker.onmessage = handleMsg;
     return worker;
@@ -5317,34 +5318,28 @@ function xhrGet(href, type, callback) {
 }
 
 function readGeojsonVT(index, layerID, x, y, z, callback){
-  console.log("inside readGeojsonVT");
-  //return { req }; //return a function which returns callback(null, data)
 
- // function req(){
-    var tile = index.getTile(z,x,y);
-    console.log("tile: "+JSON.stringify(tile));
-    var jsonTile = [];
-    if (tile && tile !== "null" && tile !== "undefined" && tile.features.length > 0) {
-      for (let i = 0; i < tile.features.length; i++) {
-        jsonTile[i] = geojsonvtToJSON(tile.features[i]);
-      }
+  var tile = index.getTile(z,x,y);
+  var jsonTile = [];
+  if (tile && tile !== "null" && tile !== "undefined" && tile.features.length > 0) {
+    for (let i = 0; i < tile.features.length; i++) {
+      jsonTile[i] = geojsonvtToJSON(tile.features[i]);
     }
-    var jsonLayer = {};
-    jsonLayer[layerID] =  {"type": "FeatureCollection", "features": jsonTile};
-    console.log("jsonLayer: "+ JSON.stringify(jsonLayer));
+  }
+  var jsonLayer = {};
+  jsonLayer[layerID] =  {"type": "FeatureCollection", "features": jsonTile};
 
-    const errMsg =
-      "ERROR in GeojsonLoader for tile z,x,y = " + [z, x, y].join(",");
-    if (tile && tile !== "null" && tile !== "undefined" && tile.features.length > 0) {
-      setTimeout(callback(null, jsonLayer), 0);
-    } else {
-      setTimeout(callback(errMsg), 0);
-    }
-    function abort() {
-      //callback(errMsg);
-    }
+  const errMsg =
+    "ERROR in GeojsonLoader for tile z,x,y = " + [z, x, y].join(",");
+  if (jsonLayer[layerID].features.length > 0) {
+    setTimeout(() => callback(null, jsonLayer));
+  } else {
+    setTimeout(() => callback(errMsg));
+  }
+
+  function abort() {
+  }
   return { abort };
-  //}
 }
 
 function geojsonvtToJSON (value){
@@ -6283,14 +6278,13 @@ onmessage = function(msgEvent) {
     case "setup":
       // NOTE: changing global variable!
       filter = initSourceProcessor(payload);
-      if(payload.type === "geojson"){
-        tileIndex = geojsonvt({"type":"FeatureCollection", "features":payload.source.features}, {extent: 512});
-        console.log("Index: "+ JSON.stringify(tileIndex.getTile(0,0,0)));
+      if(payload.source.type === "geojson"){
+        tileIndex = geojsonvt({"type":"FeatureCollection", "features":payload.source.features}, {extent: 512, maxZoom:14, minZoom:0});
       }
       break;
     case "getTile":
       let callback = (err, result) => process(id, err, result, payload.zoom);
-      let request;
+      let request = {};
       if(payload.type === "vector"){
         request = readMVT(payload.href, payload.size, callback);
       }

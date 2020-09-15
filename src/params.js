@@ -43,6 +43,7 @@ export function setParams(userParams) {
       threads,
       glyphs,
       layers,
+      source,
       queue,
       verbose,
     };
