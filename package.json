@@ -36,8 +36,8 @@
   },
   "dependencies": {
     "chunked-queue": "^0.1.1",
-    "earcut": "^2.2.2",
     "pbf": "^3.2.1",
+    "tile-gl": "0.0.2",
     "tile-labeler": "0.0.6",
     "tile-stencil": "^0.2.3",
     "vector-tile-esm": "^2.1.1"
