@@ -159,7 +159,7 @@ function initWorkers(codeHref, params) {
   function trainWorker() {
     const worker = new Worker(codeHref);
     const payload = { styles: layers, glyphEndpoint: glyphs };
-    worker.postMessage({ id: 0, type: "styles", payload });
+    worker.postMessage({ id: 0, type: "setup", payload });
     worker.onmessage = handleMsg;
     return worker;
   }
@@ -179,7 +179,7 @@ function initWorkers(codeHref, params) {
 
     msgId += 1;
     tasks[msgId] = { callback, workerID };
-    workers[workerID].postMessage({ id: msgId, type: "start", payload });
+    workers[workerID].postMessage({ id: msgId, type: "getTile", payload });
 
     return msgId; // Returned ID can be used for later cancellation
   }
@@ -5353,11 +5353,11 @@ onmessage = function(msgEvent) {
   const { id, type, payload } = msgEvent.data;
 
   switch (type) {
-    case "styles":
+    case "setup":
       // NOTE: changing global variable!
       filter = initSourceProcessor(payload);
       break;
-    case "start":
+    case "getTile":
       let callback = (err, result) => process(id, err, result, payload.zoom);
       let request  = readMVT(payload.href, payload.size, callback);
       tasks[id] = { request, status: "requested" };

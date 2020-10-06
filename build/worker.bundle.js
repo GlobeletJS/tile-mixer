@@ -4898,11 +4898,11 @@ onmessage = function(msgEvent) {
   const { id, type, payload } = msgEvent.data;
 
   switch (type) {
-    case "styles":
+    case "setup":
       // NOTE: changing global variable!
       filter = initSourceProcessor(payload);
       break;
-    case "start":
+    case "getTile":
       let callback = (err, result) => process(id, err, result, payload.zoom);
       let request  = readMVT(payload.href, payload.size, callback);
       tasks[id] = { request, status: "requested" };
