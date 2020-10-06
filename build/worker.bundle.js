@@ -3594,13 +3594,6 @@ earcut.flatten = function (data) {
 };
 earcut_1.default = default_1;
 
-function parseLine(feature) {
-  const { geometry, properties } = feature;
-  const buffers = { points: flattenLine(geometry) };
-
-  return { properties, buffers };
-}
-
 function flattenLine(geometry) {
   let { type, coordinates } = geometry;
 
@@ -3671,6 +3664,52 @@ function triangulate(feature) {
   };
 
   return { properties, buffers };
+}
+
+function parseLine(feature) {
+  const { geometry, properties } = feature;
+  const buffers = { points: flattenLine$1(geometry) };
+
+  return { properties, buffers };
+}
+
+function flattenLine$1(geometry) {
+  let { type, coordinates } = geometry;
+
+  switch (type) {
+    case "LineString":
+      return flattenLineString$1(coordinates);
+    case "MultiLineString":
+      return coordinates.flatMap(flattenLineString$1);
+    case "Polygon":
+      return flattenPolygon$1(coordinates);
+    case "MultiPolygon":
+      return coordinates.flatMap(flattenPolygon$1);
+    default:
+      return;
+  }
+}
+
+function flattenLineString$1(line) {
+  return [
+    ...[...line[0], -2.0],
+    ...line.flatMap(([x, y]) => [x, y, 0.0]),
+    ...[...line[line.length - 1], -2.0]
+  ];
+}
+
+function flattenPolygon$1(rings) {
+  return rings.flatMap(flattenLinearRing$1);
+}
+
+function flattenLinearRing$1(ring) {
+  // Definition of linear ring:
+  // ring.length > 3 && ring[ring.length - 1] == ring[0]
+  return [
+    ...[...ring[ring.length - 2], -2.0],
+    ...ring.flatMap(([x, y]) => [x, y, 0.0]),
+    ...[...ring[1], -2.0]
+  ];
 }
 
 function initFeatureGrouper(style) {
@@ -5810,18 +5849,26 @@ onmessage = function(msgEvent) {
     case "setup":
       // NOTE: changing global variable!
       filter = initSourceProcessor(payload);
-      if(payload.source.type === "geojson"){
-        tileIndex = geojsonvt({"type":"FeatureCollection", "features":payload.source.features}, {extent: 512, maxZoom:14, minZoom:0});
+      if (payload.source.type === "geojson") {
+        tileIndex = geojsonvt({
+          "type": "FeatureCollection",
+          "features": payload.source.features
+        }, {
+          extent: 512,
+          maxZoom: 14,
+          minZoom: 0,
+        });
       }
       break;
     case "getTile":
       let callback = (err, result) => process(id, err, result, payload.zoom);
       let request = {};
-      if(payload.type === "vector"){
+      if (payload.type === "vector") {
         request = readMVT(payload.href, payload.size, callback);
       }
-      if(payload.type === "geojson"){
-        request = readGeojsonVT(tileIndex, payload.layerID, payload.tileX, payload.tileY, payload.zoom, callback);
+      if (payload.type === "geojson") {
+        request = readGeojsonVT(tileIndex, payload.layerID, 
+          payload.tileX, payload.tileY, payload.zoom, callback);
       }
       tasks[id] = { request, status: "requested" };
       break;

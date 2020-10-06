@@ -1,8 +1,9 @@
 import { getStyleFuncs } from 'tile-stencil';
 import { initSourceFilter } from "./filter-source.js";
 import { initSymbols } from 'tile-labeler';
-import { triangulate } from "./fill.js";
-import { parseLine } from "./line.js";
+//import { triangulate } from "./fill.js";
+//import { parseLine } from "./line.js";
+import { triangulate, parseLine } from 'tile-gl';
 import { initFeatureGrouper } from "./group-features.js";
 
 export function initSourceProcessor({ styles, glyphEndpoint }) {

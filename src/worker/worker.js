@@ -17,18 +17,26 @@ onmessage = function(msgEvent) {
     case "setup":
       // NOTE: changing global variable!
       filter = initSourceProcessor(payload);
-      if(payload.source.type === "geojson"){
-        tileIndex = geojsonvt({"type":"FeatureCollection", "features":payload.source.features}, {extent: 512, maxZoom:14, minZoom:0});
+      if (payload.source.type === "geojson") {
+        tileIndex = geojsonvt({
+          "type": "FeatureCollection",
+          "features": payload.source.features
+        }, {
+          extent: 512,
+          maxZoom: 14,
+          minZoom: 0,
+        });
       }
       break;
     case "getTile":
       let callback = (err, result) => process(id, err, result, payload.zoom);
       let request = {};
-      if(payload.type === "vector"){
+      if (payload.type === "vector") {
         request = readMVT(payload.href, payload.size, callback);
       }
-      if(payload.type === "geojson"){
-        request = readGeojsonVT(tileIndex, payload.layerID, payload.tileX, payload.tileY, payload.zoom, callback);
+      if (payload.type === "geojson") {
+        request = readGeojsonVT(tileIndex, payload.layerID, 
+          payload.tileX, payload.tileY, payload.zoom, callback);
       }
       tasks[id] = { request, status: "requested" };
       break;

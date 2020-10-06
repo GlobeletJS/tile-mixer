@@ -1,7 +1,9 @@
-import { initFillBufferLoader } from "./fill.js";
-import { initLineBufferLoader } from "./line.js";
-import { initTextBufferLoader } from "./text.js";
-import { initAtlasLoader } from "./atlas.js";
+import { 
+  initLineBufferLoader,
+  initFillBufferLoader,
+  initTextBufferLoader,
+  initAtlasLoader,
+} from 'tile-gl';
 
 export function initDataPrep(styles, context) {
   const lineLoader = initLineBufferLoader(context);
