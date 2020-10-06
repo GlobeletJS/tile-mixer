@@ -1,4 +1,4 @@
-import { initSourceFilter } from "./filter-source.js";
+import { initSourceProcessor } from "./process.js";
 import { readMVT } from "./read.js";
 
 const tasks = {};
@@ -11,17 +11,14 @@ onmessage = function(msgEvent) {
   const { id, type, payload } = msgEvent.data;
 
   switch (type) {
-    case "styles":
+    case "setup":
       // NOTE: changing global variable!
-      filter = initSourceFilter(payload);
+      filter = initSourceProcessor(payload);
       break;
-    case "start":
-      let callback = (err, result) => sendHeader(id, err, result, payload.zoom);
+    case "getTile":
+      let callback = (err, result) => process(id, err, result, payload.zoom);
       let request  = readMVT(payload.href, payload.size, callback);
       tasks[id] = { request, status: "requested" };
-      break;
-    case "continue":
-      sendData(id);
       break;
     case "cancel":
       let task = tasks[id];
@@ -33,7 +30,7 @@ onmessage = function(msgEvent) {
   }
 }
 
-function sendHeader(id, err, result, zoom) {
+function process(id, err, result, zoom) {
   // Make sure we still have an active task for this ID
   let task = tasks[id];
   if (!task) return;  // Task must have been canceled
@@ -43,69 +40,23 @@ function sendHeader(id, err, result, zoom) {
     return postMessage({ id, type: "error", payload: err });
   }
 
-  result = filter(result, zoom);
-  task.result = result;
-  task.layers = Object.keys(result);
-  task.status = "parsed";
-
-  // Send a header with info about each layer
-  const headers = {};
-  task.layers.forEach(key => {
-    let data = result[key];
-    let header = { compressed: data.compressed.length };
-    if (data.features) header.features = data.features.length;
-    if (data.properties) header.properties = data.properties;
-    headers[key] = header;
-  });
-  postMessage({ id, type: "header", payload: headers });
+  task.status = "parsing";
+  return filter(result, zoom).then(tile => sendTile(id, tile));
 }
 
-function sendData(id) {
+function sendTile(id, tile) {
   // Make sure we still have an active task for this ID
   let task = tasks[id];
-  if (!task) return;  // Task must have been canceled
+  if (!task) return; // Task must have been canceled
 
-  var currentLayer = task.result[task.layers[0]];
-  // Make sure we still have data in this layer
-  var dataType = getDataType(currentLayer);
-  if (dataType === "none") {
-    task.layers.shift();           // Discard this layer
-    currentLayer = task.result[task.layers[0]];
-    dataType = getDataType(currentLayer);
-  }
-  if (task.layers.length == 0) {
-    delete tasks[id];
-    postMessage({ id, type: "done" });
-    return;
-  }
+  // Get a list of all the Transferable objects
+  const transferables = Object.values(tile.layers)
+    .flatMap(features => features.flatMap(getFeatureBuffers));
+  transferables.push(tile.atlas.data.buffer);
 
-  // Get the next chunk of data and send it back to the main thread
-  var chunk = getChunk(currentLayer[dataType]);
-  postMessage({ id, type: dataType, key: task.layers[0], payload: chunk });
+  postMessage({ id, type: "data", payload: tile }, transferables);
 }
 
-function getDataType(layer) {
-  if (!layer) return "none";
-  // All layers have a 'compressed' array
-  if (layer.compressed.length > 0) return "compressed";
-  // 'compressed' array is empty. There might still be a 'features' array
-  if (layer.features && layer.features.length > 0) return "features";
-  return "none";
-}
-
-function getChunk(arr) {
-  // Limit to 100 KB per postMessage. TODO: Consider 10KB for cheap phones? 
-  // See https://dassur.ma/things/is-postmessage-slow/
-  const maxChunk = 100000; 
-
-  let chunk = [];
-  let chunkSize = 0;
-
-  while (arr[0] && chunkSize < maxChunk) {
-    let item = arr.shift();
-    chunkSize += JSON.stringify(item).length;
-    chunk.push(item);
-  }
-
-  return chunk;
+function getFeatureBuffers(feature) {
+  return Object.values(feature.buffers).map(b => b.buffer);
 }

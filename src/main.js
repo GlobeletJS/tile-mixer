@@ -9,10 +9,10 @@ export function initTileMixer(userParams) {
 
   // Initialize workers
   const workerPath = URL.createObjectURL( new Blob([workerCode]) );
-  const workers = initWorkers(params.threads, workerPath, params.layers);
+  const workers = initWorkers(workerPath, params);
   URL.revokeObjectURL(workerPath);
 
-  const getPrepFuncs = initDataPrep(params.layers);
+  const getPrepFuncs = initDataPrep(params.layers, params.context);
 
   // Define request function
   function request({ z, x, y, getPriority, callback }) {

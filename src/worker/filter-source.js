@@ -1,52 +1,31 @@
-import { getStyleFuncs      } from 'tile-stencil';
 import { buildFeatureFilter } from "./filter-feature.js";
-import { initFeatureGrouper } from "./group-features.js";
-import { initLabelParser, getFont } from "./parse-labels.js";
 
 export function initSourceFilter(styles) {
-  // Make an [ID, getter] pair for each layer
-  const filters = styles.map(getStyleFuncs)
-    .map(style => [style.id, makeLayerFilter(style)]);
+  const filters = styles.map(initLayerFilter);
 
-  return function(source, zoom) {
-    const filtered = {};
-    filters.forEach(([id, filter]) => {
-      let data = filter(source, zoom);
-      if (data) filtered[id] = data;
-    });
-    return filtered; // Dictionary of FeatureCollections, keyed on style.id
+  return function(source, z) {
+    return filters.reduce((d, f) => Object.assign(d, f(source, z)), {});
   };
 }
 
-function makeLayerFilter(style) {
-  const { type, layout, interactive, minzoom = 0, maxzoom = 99 } = style;
+function initLayerFilter(style) {
+  const { id, type, filter,
+    minzoom = 0, maxzoom = 99,
+    "source-layer": sourceLayer,
+  } = style;
 
-  const sourceLayer = style["source-layer"];
-  const filterObject = composeFilters(getGeomFilter(type), style.filter);
-  const filter = buildFeatureFilter(filterObject);
-
-  const isLabel = type === "symbol";
-  const compress = (isLabel)
-    ? initLabelParser(style)
-    : initFeatureGrouper(style);
+  const filterObject = composeFilters(getGeomFilter(type), filter);
+  const parsedFilter = buildFeatureFilter(filterObject);
 
   return function(source, zoom) {
     // source is a dictionary of FeatureCollections, keyed on source-layer
-    if (!source || zoom < minzoom || maxzoom < zoom) return false;
+    if (!source || zoom < minzoom || maxzoom < zoom) return;
 
     let layer = source[sourceLayer];
-    if (!layer) return false;
+    if (!layer) return;
 
-    let features = layer.features.filter(filter);
-    if (features.length < 1) return false;
-
-    let compressed = compress(features, zoom);
-
-    let collection = { type: "FeatureCollection", compressed };
-    if (interactive) collection.features = features;
-    if (isLabel) collection.properties = { font: getFont(layout, zoom) };
-
-    return collection;
+    let features = layer.features.filter(parsedFilter);
+    if (features.length > 0) return { [id]: features };
   };
 }
 
@@ -64,6 +43,8 @@ function getGeomFilter(type) {
       return ["!=", "$type", "Point"]; // Could be LineString or Polygon
     case "fill":
       return ["==", "$type", "Polygon"];
+    case "symbol":
+      return ["==", "$type", "Point"]; // TODO: implement line geom labels
     default:
       return; // No condition on geometry
   }
