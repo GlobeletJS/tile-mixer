@@ -1,4 +1,4 @@
-import { 
+import {
   initLineBufferLoader,
   initFillBufferLoader,
   initTextBufferLoader,

@@ -19,26 +19,25 @@ export function initTileMixer(userParams) {
     const reqHandle = {};
 
     var readInfo ={};
-    if(userParams.source.type === "vector"){
+    if (userParams.source.type === "vector") {
       readInfo = { 
         type: "vector",
         href: params.getURL(z, x, y),
         size: 512, 
         zoom: z 
       };
-    }
-
-    if(userParams.source.type === "geojson"){
+    } else if (userParams.source.type === "geojson") {
       readInfo = {
         type: "geojson",
         source: userParams.source,
         layerID: userParams.layers[0].id,
-        size:512,
+        size: 512,
         tileX: x,
         tileY: y,
         zoom: z
       };
     }
+
     const readTaskId = workers.startTask(readInfo, prepData);
     reqHandle.abort = () => workers.cancelTask(readTaskId);
 

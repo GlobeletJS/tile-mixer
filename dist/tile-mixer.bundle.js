@@ -117,32 +117,22 @@ function setParams(userParams) {
   let sameSource = layers.every( l => l.source === layers[0].source );
   if (!sameSource) fail("supplied layers use different sources!");
 
-  // Construct function to get a tile URL
   if (!source) fail("parameters.source is required!");
-  if(source.type === "vector"){
-    const getURL = initUrlFunc(source.tiles);
 
-    return {
-      context,
-      threads,
-      glyphs,
-      getURL,
-      layers,
-      queue,
-      verbose,
-    };
-  }
-  if(source.type === "geojson"){
-    return {
-      context,
-      threads,
-      glyphs,
-      layers,
-      source,
-      queue,
-      verbose,
-    };
-  }
+  const params = {
+    context,
+    threads,
+    glyphs,
+    layers,
+    queue,
+    verbose,
+  };
+
+  // Construct function to get a tile URL
+  if (source.type === "vector") params.getURL = initUrlFunc(source.tiles);
+  if (source.type === "geojson") params.source = source;
+
+  return params;
 }
 
 function initUrlFunc(endpoints) {
@@ -171,7 +161,7 @@ function initWorkers(codeHref, params) {
   // Initialize the worker threads, and send them the styles
   function trainWorker() {
     const worker = new Worker(codeHref);
-    const payload = { styles: layers, glyphEndpoint: glyphs, source: source };
+    const payload = { styles: layers, glyphEndpoint: glyphs, source };
     worker.postMessage({ id: 0, type: "setup", payload });
     worker.onmessage = handleMsg;
     return worker;
@@ -5356,9 +5346,12 @@ function xhrGet(href, type, callback) {
   return req; // Request can be aborted via req.abort()
 }
 
-function readGeojsonVT(index, layerID, x, y, z, callback){
+function readGeojsonVT(index, layerID, x, y, z, callback) {
+  // TODO: does geojson-vt always return only one layer?
 
   var tile = index.getTile(z,x,y);
+
+  // TODO: is tile.features an array? If so, can we use a map statement here?
   var jsonTile = [];
   if (tile && tile !== "null" && tile !== "undefined" && tile.features.length > 0) {
     for (let i = 0; i < tile.features.length; i++) {
@@ -5376,46 +5369,31 @@ function readGeojsonVT(index, layerID, x, y, z, callback){
     setTimeout(() => callback(errMsg));
   }
 
-  function abort() {
-  }
-  return { abort };
+  return { abort: () => undefined };
 }
 
-function geojsonvtToJSON (value){
+function geojsonvtToJSON (value) {
   //http://www.scgis.net/api/ol/v4.1.1/examples/geojson-vt.html
-  if (value.geometry) {
-    var type;
-    var rawType = value.type;
-    var geometry = value.geometry;
+  if (!value.geometry) return value;
 
-    if (rawType === 1) {
-      type = geometry.length === 1 ? 'Point' : 'MultiPoint';
-    } else if (rawType === 2) {
-      type = geometry.length === 1 ? 'LineString' : 'MultiLineString';
-    } else if (rawType === 3) {
-      type = geometry.length === 1 ? 'Polygon' : 'MultiPolygon';
-    }
+  const geometry = value.geometry;
 
-    if (rawType === 1) {
-      return {
-        geometry: {
-          type: type,
-          coordinates: geometry.length == 1 ? geometry[0] : [geometry]
-        },
-        properties: value.tags
-      };
-    } else {
-      return {
-        geometry: {
-          type: type,
-          coordinates: geometry.length == 1 ? geometry : [geometry]
-        },
-        properties: value.tags
-      };
-    }
-  } else {
-    return value;
-  }
+  const types = ['Unknown', 'Point', 'Linestring', 'Polygon'];
+
+  // TODO: What if geometry.length < 1?
+  const type = (geometry.length === 1)
+    ? types[value.type]
+    : 'Multi' + types[value.type];
+
+  const coordinates = 
+    (geometry.length != 1) ? [geometry]
+    : (type === 'MultiPoint') ? geometry[0]
+    : geometry;
+
+  return {
+    geometry: { type, coordinates },
+    properties: value.tags
+  };
 }
 
 // calculate simplification data using optimized Douglas-Peucker algorithm
@@ -6397,26 +6375,25 @@ function initTileMixer(userParams) {
     const reqHandle = {};
 
     var readInfo ={};
-    if(userParams.source.type === "vector"){
+    if (userParams.source.type === "vector") {
       readInfo = { 
         type: "vector",
         href: params.getURL(z, x, y),
         size: 512, 
         zoom: z 
       };
-    }
-
-    if(userParams.source.type === "geojson"){
+    } else if (userParams.source.type === "geojson") {
       readInfo = {
         type: "geojson",
         source: userParams.source,
         layerID: userParams.layers[0].id,
-        size:512,
+        size: 512,
         tileX: x,
         tileY: y,
         zoom: z
       };
     }
+
     const readTaskId = workers.startTask(readInfo, prepData);
     reqHandle.abort = () => workers.cancelTask(readTaskId);
 

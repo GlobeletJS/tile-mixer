@@ -4888,9 +4888,12 @@ function xhrGet(href, type, callback) {
   return req; // Request can be aborted via req.abort()
 }
 
-function readGeojsonVT(index, layerID, x, y, z, callback){
+function readGeojsonVT(index, layerID, x, y, z, callback) {
+  // TODO: does geojson-vt always return only one layer?
 
   var tile = index.getTile(z,x,y);
+
+  // TODO: is tile.features an array? If so, can we use a map statement here?
   var jsonTile = [];
   if (tile && tile !== "null" && tile !== "undefined" && tile.features.length > 0) {
     for (let i = 0; i < tile.features.length; i++) {
@@ -4908,46 +4911,31 @@ function readGeojsonVT(index, layerID, x, y, z, callback){
     setTimeout(() => callback(errMsg));
   }
 
-  function abort() {
-  }
-  return { abort };
+  return { abort: () => undefined };
 }
 
-function geojsonvtToJSON (value){
+function geojsonvtToJSON (value) {
   //http://www.scgis.net/api/ol/v4.1.1/examples/geojson-vt.html
-  if (value.geometry) {
-    var type;
-    var rawType = value.type;
-    var geometry = value.geometry;
+  if (!value.geometry) return value;
 
-    if (rawType === 1) {
-      type = geometry.length === 1 ? 'Point' : 'MultiPoint';
-    } else if (rawType === 2) {
-      type = geometry.length === 1 ? 'LineString' : 'MultiLineString';
-    } else if (rawType === 3) {
-      type = geometry.length === 1 ? 'Polygon' : 'MultiPolygon';
-    }
+  const geometry = value.geometry;
 
-    if (rawType === 1) {
-      return {
-        geometry: {
-          type: type,
-          coordinates: geometry.length == 1 ? geometry[0] : [geometry]
-        },
-        properties: value.tags
-      };
-    } else {
-      return {
-        geometry: {
-          type: type,
-          coordinates: geometry.length == 1 ? geometry : [geometry]
-        },
-        properties: value.tags
-      };
-    }
-  } else {
-    return value;
-  }
+  const types = ['Unknown', 'Point', 'Linestring', 'Polygon'];
+
+  // TODO: What if geometry.length < 1?
+  const type = (geometry.length === 1)
+    ? types[value.type]
+    : 'Multi' + types[value.type];
+
+  const coordinates = 
+    (geometry.length != 1) ? [geometry]
+    : (type === 'MultiPoint') ? geometry[0]
+    : geometry;
+
+  return {
+    geometry: { type, coordinates },
+    properties: value.tags
+  };
 }
 
 // calculate simplification data using optimized Douglas-Peucker algorithm

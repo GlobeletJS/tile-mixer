@@ -7,7 +7,7 @@ export function initWorkers(codeHref, params) {
   // Initialize the worker threads, and send them the styles
   function trainWorker() {
     const worker = new Worker(codeHref);
-    const payload = { styles: layers, glyphEndpoint: glyphs, source: source };
+    const payload = { styles: layers, glyphEndpoint: glyphs, source };
     worker.postMessage({ id: 0, type: "setup", payload });
     worker.onmessage = handleMsg;
     return worker;
