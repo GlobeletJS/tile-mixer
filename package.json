@@ -30,12 +30,13 @@
   },
   "homepage": "https://github.com/GlobeletJS/tile-mixer#readme",
   "devDependencies": {
-    "rollup": "^1.28.0",
+    "rollup": "^1.32.1",
     "rollup-plugin-commonjs": "^10.1.0",
     "rollup-plugin-node-resolve": "^5.2.0"
   },
   "dependencies": {
-    "chunked-queue": "^0.1.1",
+    "chunked-queue": "^0.1.2",
+    "geojson-vt": "^3.2.1",
     "pbf": "^3.2.1",
     "tile-gl": "0.0.3",
     "tile-labeler": "0.0.6",

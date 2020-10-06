@@ -22,19 +22,22 @@ export function setParams(userParams) {
   let sameSource = layers.every( l => l.source === layers[0].source );
   if (!sameSource) fail("supplied layers use different sources!");
 
-  // Construct function to get a tile URL
   if (!source) fail("parameters.source is required!");
-  const getURL = initUrlFunc(source.tiles);
 
-  return {
+  const params = {
     context,
     threads,
     glyphs,
-    getURL,
     layers,
     queue,
     verbose,
   };
+
+  // Construct function to get a tile URL
+  if (source.type === "vector") params.getURL = initUrlFunc(source.tiles);
+  if (source.type === "geojson") params.source = source;
+
+  return params;
 }
 
 function initUrlFunc(endpoints) {
