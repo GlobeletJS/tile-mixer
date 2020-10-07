@@ -27,6 +27,7 @@ export function setParams(userParams) {
   const params = {
     context,
     threads,
+    source,
     glyphs,
     layers,
     queue,
@@ -35,7 +36,6 @@ export function setParams(userParams) {
 
   // Construct function to get a tile URL
   if (source.type === "vector") params.getURL = initUrlFunc(source.tiles);
-  if (source.type === "geojson") params.source = source;
 
   return params;
 }
