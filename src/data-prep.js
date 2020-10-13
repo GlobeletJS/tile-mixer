@@ -2,6 +2,7 @@ import {
   initLineBufferLoader,
   initFillBufferLoader,
   initTextBufferLoader,
+  initCircleBufferLoader,
   initAtlasLoader,
 } from 'tile-gl';
 
@@ -9,10 +10,11 @@ export function initDataPrep(styles, context) {
   const lineLoader = initLineBufferLoader(context);
   const fillLoader = initFillBufferLoader(context, lineLoader);
   const textLoader = initTextBufferLoader(context);
+  const circleLoader = initCircleBufferLoader(context);
   const loadAtlas  = initAtlasLoader(context);
 
   const pathFuncs = {
-    "circle": () => undefined, // TODO
+    "circle": makePathAdder(circleLoader),
     "line": makePathAdder(lineLoader),
     "fill": makePathAdder(fillLoader),
     "symbol": makePathAdder(textLoader), // TODO: add sprite handling

@@ -387,6 +387,50 @@ function initTextBufferLoader(context) {
   };
 }
 
+function initCircleBufferLoader(context) {
+  const { gl, constructCircleVao } = context;
+
+  // Create a buffer with the position of the vertices within one instance
+  const instanceGeom = new Float32Array([
+    -1.0, -1.0,   1.0, -1.0,   1.0,  1.0,
+    -1.0, -1.0,   1.0,  1.0,  -1.0,  1.0,
+  ]);
+
+  const quadPos = {
+    buffer: gl.createBuffer(),
+    numComponents: 2,
+    type: gl.FLOAT,
+    normalize: false,
+    stride: 0,
+    offset: 0,
+    divisor: 0,
+  };
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadPos.buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, instanceGeom, gl.STATIC_DRAW);
+
+  return function(buffers) {
+    const { origins } = buffers;
+    const numInstances = origins.length / 2;
+
+    const circlePos = {
+      buffer: gl.createBuffer(),
+      numComponents: 2,
+      type: gl.FLOAT,
+      normalize: false,
+      stride: 0,
+      offset: 0,
+      divisor: 1,
+    };
+    gl.bindBuffer(gl.ARRAY_BUFFER, circlePos.buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, origins, gl.STATIC_DRAW);
+
+    const attributes = { quadPos, circlePos };
+    const circleVao = constructCircleVao({ attributes });
+
+    return { circleVao, numInstances };
+  };
+}
+
 function initAtlasLoader(context) {
   const { gl } = context;
 
@@ -419,10 +463,11 @@ function initDataPrep(styles, context) {
   const lineLoader = initLineBufferLoader(context);
   const fillLoader = initFillBufferLoader(context, lineLoader);
   const textLoader = initTextBufferLoader(context);
+  const circleLoader = initCircleBufferLoader(context);
   const loadAtlas  = initAtlasLoader(context);
 
   const pathFuncs = {
-    "circle": () => undefined, // TODO
+    "circle": makePathAdder(circleLoader),
     "line": makePathAdder(lineLoader),
     "fill": makePathAdder(fillLoader),
     "symbol": makePathAdder(textLoader), // TODO: add sprite handling
@@ -4170,6 +4215,26 @@ function flattenLinearRing$1(ring) {
   ];
 }
 
+function parseCircle(feature) {
+  const { geometry, properties } = feature;
+  const buffers = { origins: flattenCircles(geometry) };
+
+  return { properties, buffers };
+}
+
+function flattenCircles(geometry) {
+  const { type, coordinates } = geometry;
+
+  switch (type) {
+    case "Point":
+      return coordinates;
+    case "MultiPoint":
+      return coordinates.flat();
+    default:
+      return;
+  }
+}
+
 function initFeatureGrouper(style) {
   // Find the names of the feature properties that affect rendering
   const renderPropertyNames = Object.values(style.paint)
@@ -4263,7 +4328,7 @@ function initProcessor(styles) {
     let { id, type } = style;
 
     dict[id] =
-      (type === "circle") ? null // TODO
+      (type === "circle") ? parseCircle
       : (type === "line") ? parseLine
       : (type === "fill") ? triangulate
       : null;

@@ -3712,6 +3712,26 @@ function flattenLinearRing$1(ring) {
   ];
 }
 
+function parseCircle(feature) {
+  const { geometry, properties } = feature;
+  const buffers = { origins: flattenCircles(geometry) };
+
+  return { properties, buffers };
+}
+
+function flattenCircles(geometry) {
+  const { type, coordinates } = geometry;
+
+  switch (type) {
+    case "Point":
+      return coordinates;
+    case "MultiPoint":
+      return coordinates.flat();
+    default:
+      return;
+  }
+}
+
 function initFeatureGrouper(style) {
   // Find the names of the feature properties that affect rendering
   const renderPropertyNames = Object.values(style.paint)
@@ -3805,7 +3825,7 @@ function initProcessor(styles) {
     let { id, type } = style;
 
     dict[id] =
-      (type === "circle") ? null // TODO
+      (type === "circle") ? parseCircle
       : (type === "line") ? parseLine
       : (type === "fill") ? triangulate
       : null;
