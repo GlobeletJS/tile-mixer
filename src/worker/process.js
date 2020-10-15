@@ -1,7 +1,7 @@
 import { getStyleFuncs } from 'tile-stencil';
 import { initSourceFilter } from "./filter-source.js";
 import { initSymbols } from 'tile-labeler';
-import { triangulate, parseLine, parseCircle } from 'tile-gl';
+import { parseFill, parseLine, parseCircle } from 'tile-gl';
 import { initFeatureGrouper } from "./group-features.js";
 
 export function initSourceProcessor({ styles, glyphEndpoint }) {
@@ -40,7 +40,7 @@ function initProcessor(styles) {
     dict[id] =
       (type === "circle") ? parseCircle
       : (type === "line") ? parseLine
-      : (type === "fill") ? triangulate
+      : (type === "fill") ? parseFill
       : null;
 
     return dict;

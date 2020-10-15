@@ -38,7 +38,7 @@
     "chunked-queue": "^0.1.2",
     "geojson-vt": "^3.2.1",
     "pbf": "^3.2.1",
-    "tile-gl": "0.0.4",
+    "tile-gl": "0.0.5",
     "tile-labeler": "0.0.6",
     "tile-stencil": "^0.2.4",
     "vector-tile-esm": "^2.1.1"

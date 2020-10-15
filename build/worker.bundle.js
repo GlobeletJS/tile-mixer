@@ -3594,7 +3594,7 @@ earcut.flatten = function (data) {
 };
 earcut_1.default = default_1;
 
-function flattenLine(geometry) {
+function flattenLines(geometry) {
   let { type, coordinates } = geometry;
 
   switch (type) {
@@ -3633,7 +3633,7 @@ function flattenLinearRing(ring) {
   ];
 }
 
-function triangulate(feature) {
+function parseFill(feature) {
   const { geometry, properties } = feature;
 
   // Normalize coordinate structure
@@ -3660,7 +3660,7 @@ function triangulate(feature) {
   const buffers = {
     vertices: combined.vertices,
     indices: combined.indices,
-    points: flattenLine(geometry), // For rendering the outline
+    lines: flattenLines(geometry), // For rendering the outline
   };
 
   return { properties, buffers };
@@ -3668,12 +3668,12 @@ function triangulate(feature) {
 
 function parseLine(feature) {
   const { geometry, properties } = feature;
-  const buffers = { points: flattenLine$1(geometry) };
+  const buffers = { lines: flattenLines$1(geometry) };
 
   return { properties, buffers };
 }
 
-function flattenLine$1(geometry) {
+function flattenLines$1(geometry) {
   let { type, coordinates } = geometry;
 
   switch (type) {
@@ -3714,12 +3714,12 @@ function flattenLinearRing$1(ring) {
 
 function parseCircle(feature) {
   const { geometry, properties } = feature;
-  const buffers = { origins: flattenCircles(geometry) };
+  const buffers = { points: flattenPoints(geometry) };
 
   return { properties, buffers };
 }
 
-function flattenCircles(geometry) {
+function flattenPoints(geometry) {
   const { type, coordinates } = geometry;
 
   switch (type) {
@@ -3827,7 +3827,7 @@ function initProcessor(styles) {
     dict[id] =
       (type === "circle") ? parseCircle
       : (type === "line") ? parseLine
-      : (type === "fill") ? triangulate
+      : (type === "fill") ? parseFill
       : null;
 
     return dict;

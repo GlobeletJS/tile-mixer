@@ -228,277 +228,28 @@ function getIdleWorkerID(workLoads) {
   return id;
 }
 
-function initFillBufferLoader(context, lineLoader) {
-  const { gl, constructFillVao } = context;
-
-  return function(buffers) {
-    const vertexPositions = {
-      buffer: gl.createBuffer(),
-      numComponents: 2,
-      type: gl.FLOAT,
-      normalize: false,
-      stride: 0,
-      offset: 0
-    };
-    gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositions.buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, buffers.vertices, gl.STATIC_DRAW);
-
-    const indices = {
-      buffer: gl.createBuffer(),
-      vertexCount: buffers.indices.length,
-      type: gl.UNSIGNED_SHORT,
-      offset: 0
-    };
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices.buffer);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, buffers.indices, gl.STATIC_DRAW);
-
-    const attributes = { a_position: vertexPositions };
-    const fillVao = constructFillVao({ attributes, indices });
-    const path = { fillVao, indices };
-
-    const strokePath = lineLoader(buffers);
-
-    return Object.assign(path, strokePath);
-  }
-}
-
-function initLineBufferLoader(context) {
-  const { gl, constructStrokeVao } = context;
-
-  // Create a buffer with the position of the vertices within one instance
-  const instanceGeom = new Float32Array([
-    0, -0.5,   1, -0.5,   1,  0.5,
-    0, -0.5,   1,  0.5,   0,  0.5
-  ]);
-
-  const position = {
-    buffer: gl.createBuffer(),
-    numComponents: 2,
-    type: gl.FLOAT,
-    normalize: false,
-    stride: 0,
-    offset: 0,
-    divisor: 0,
-  };
-  gl.bindBuffer(gl.ARRAY_BUFFER, position.buffer);
-  gl.bufferData(gl.ARRAY_BUFFER, instanceGeom, gl.STATIC_DRAW);
-
-  return function(buffers) {
-    const numComponents = 3;
-    const numInstances = buffers.points.length / numComponents - 3;
-
-    // Create buffer containing the vertex positions
-    const pointsBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, pointsBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, buffers.points, gl.STATIC_DRAW);
-
-    // Create interleaved attributes pointing to different offsets in buffer
-    const attributes = {
-      position,
-      pointA: setupPoint(0),
-      pointB: setupPoint(1),
-      pointC: setupPoint(2),
-      pointD: setupPoint(3),
-    };
-
-    function setupPoint(offset) {
-      return {
-        buffer: pointsBuffer,
-        numComponents: numComponents,
-        type: gl.FLOAT,
-        normalize: false,
-        stride: Float32Array.BYTES_PER_ELEMENT * numComponents,
-        offset: Float32Array.BYTES_PER_ELEMENT * numComponents * offset,
-        divisor: 1
-      };
-    }
-
-    const strokeVao = constructStrokeVao({ attributes });
-
-    return { strokeVao, numInstances };
-  };
-}
-
-function initTextBufferLoader(context) {
-  const { gl, constructTextVao } = context;
-
-  // Create a buffer with the position of the vertices within one instance
-  const instanceGeom = new Float32Array([
-    0.0,  0.0,   1.0,  0.0,   1.0,  1.0,
-    0.0,  0.0,   1.0,  1.0,   0.0,  1.0
-  ]);
-
-  const quadPos = {
-    buffer: gl.createBuffer(),
-    numComponents: 2,
-    type: gl.FLOAT,
-    normalize: false,
-    stride: 0,
-    offset: 0,
-    divisor: 0,
-  };
-  gl.bindBuffer(gl.ARRAY_BUFFER, quadPos.buffer);
-  gl.bufferData(gl.ARRAY_BUFFER, instanceGeom, gl.STATIC_DRAW);
-
-  return function(buffers) {
-    const { origins, deltas, rects } = buffers;
-    const numInstances = origins.length / 2;
-
-    const labelPos = {
-      buffer: gl.createBuffer(),
-      numComponents: 2,
-      type: gl.FLOAT,
-      normalize: false,
-      stride: 0,
-      offset: 0,
-      divisor: 1,
-    };
-    gl.bindBuffer(gl.ARRAY_BUFFER, labelPos.buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, origins, gl.STATIC_DRAW);
-
-    const charPos = {
-      buffer: gl.createBuffer(),
-      numComponents: 2,
-      type: gl.FLOAT,
-      normalize: false,
-      stride: 0,
-      offset: 0,
-      divisor: 1,
-    };
-    gl.bindBuffer(gl.ARRAY_BUFFER, charPos.buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, deltas, gl.STATIC_DRAW);
-
-    const sdfRect = {
-      buffer: gl.createBuffer(),
-      numComponents: 4,
-      type: gl.FLOAT,
-      normalize: false,
-      stride: 0,
-      offset: 0,
-      divisor: 1,
-    };
-    gl.bindBuffer(gl.ARRAY_BUFFER, sdfRect.buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, rects, gl.STATIC_DRAW);
-
-    const attributes = { quadPos, labelPos, charPos, sdfRect };
-    const textVao = constructTextVao({ attributes });
-
-    return { textVao, numInstances };
-  };
-}
-
-function initCircleBufferLoader(context) {
-  const { gl, constructCircleVao } = context;
-
-  // Create a buffer with the position of the vertices within one instance
-  const instanceGeom = new Float32Array([
-    -1.0, -1.0,   1.0, -1.0,   1.0,  1.0,
-    -1.0, -1.0,   1.0,  1.0,  -1.0,  1.0,
-  ]);
-
-  const quadPos = {
-    buffer: gl.createBuffer(),
-    numComponents: 2,
-    type: gl.FLOAT,
-    normalize: false,
-    stride: 0,
-    offset: 0,
-    divisor: 0,
-  };
-  gl.bindBuffer(gl.ARRAY_BUFFER, quadPos.buffer);
-  gl.bufferData(gl.ARRAY_BUFFER, instanceGeom, gl.STATIC_DRAW);
-
-  return function(buffers) {
-    const { origins } = buffers;
-    const numInstances = origins.length / 2;
-
-    const circlePos = {
-      buffer: gl.createBuffer(),
-      numComponents: 2,
-      type: gl.FLOAT,
-      normalize: false,
-      stride: 0,
-      offset: 0,
-      divisor: 1,
-    };
-    gl.bindBuffer(gl.ARRAY_BUFFER, circlePos.buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, origins, gl.STATIC_DRAW);
-
-    const attributes = { quadPos, circlePos };
-    const circleVao = constructCircleVao({ attributes });
-
-    return { circleVao, numInstances };
-  };
-}
-
-function initAtlasLoader(context) {
-  const { gl } = context;
-
-  return function(atlas) {
-    const { width, height, data } = atlas;
-
-    const target = gl.TEXTURE_2D;
-    const texture = gl.createTexture();
-    gl.bindTexture(target, texture);
-
-    const level = 0;
-    const format = gl.ALPHA;
-    const border = 0;
-    const type = gl.UNSIGNED_BYTE;
-
-    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-
-    gl.texImage2D(target, level, format, 
-      width, height, border, format, type, data);
-
-    gl.texParameteri(target, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(target, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(target, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-
-    return { width, height, sampler: texture };
-  };
-}
-
-function initDataPrep(styles, context) {
-  const lineLoader = initLineBufferLoader(context);
-  const fillLoader = initFillBufferLoader(context, lineLoader);
-  const textLoader = initTextBufferLoader(context);
-  const circleLoader = initCircleBufferLoader(context);
-  const loadAtlas  = initAtlasLoader(context);
-
-  const pathFuncs = {
-    "circle": makePathAdder(circleLoader),
-    "line": makePathAdder(lineLoader),
-    "fill": makePathAdder(fillLoader),
-    "symbol": makePathAdder(textLoader), // TODO: add sprite handling
-  };
-
-  // Build a dictionary of data prep functions, keyed on style.id
-  const prepFunctions = styles.reduce((dict, style) => {
-    let { id, type } = style;
-    dict[id] = pathFuncs[type];
-    return dict;
-  }, {});
-
+function initDataPrep(context) {
   // Return a function that creates an array of prep calls for a source
-  return function (source, zoom) {
+  return function (source) {
     let { atlas, layers } = source;
 
-    const prepTasks = Object.keys(layers)
-      .map(id => () => prepFunctions[id](layers[id], zoom));
+    const prepTasks = Object.values(layers)
+      .map(layer => () => loadFeatures(layer));
 
-    prepTasks.push(() => { source.atlas = loadAtlas(atlas); });
+    if (atlas) {
+      prepTasks.push(() => { source.atlas = context.loadAtlas(atlas); });
+    }
 
     return prepTasks;
   };
-}
 
-function makePathAdder(pathFunc) {
-  // TODO: make this more functional? Note: keeping feature.properties
-  return (features) => features.forEach(feature => {
-    feature.path = pathFunc(feature.buffers);
-    delete feature.buffers;  // Should we do this?
-  });
+  function loadFeatures(features) {
+    // TODO: make this more functional? Note: keeping feature.properties
+    features.forEach(feature => {
+      feature.path = context.loadBuffers(feature.buffers);
+      delete feature.buffers;  // Should we do this?
+    });
+  }
 }
 
 var workerCode = String.raw`function define(constructor, factory, prototype) {
@@ -4097,7 +3848,7 @@ earcut.flatten = function (data) {
 };
 earcut_1.default = default_1;
 
-function flattenLine(geometry) {
+function flattenLines(geometry) {
   let { type, coordinates } = geometry;
 
   switch (type) {
@@ -4136,7 +3887,7 @@ function flattenLinearRing(ring) {
   ];
 }
 
-function triangulate(feature) {
+function parseFill(feature) {
   const { geometry, properties } = feature;
 
   // Normalize coordinate structure
@@ -4163,7 +3914,7 @@ function triangulate(feature) {
   const buffers = {
     vertices: combined.vertices,
     indices: combined.indices,
-    points: flattenLine(geometry), // For rendering the outline
+    lines: flattenLines(geometry), // For rendering the outline
   };
 
   return { properties, buffers };
@@ -4171,12 +3922,12 @@ function triangulate(feature) {
 
 function parseLine(feature) {
   const { geometry, properties } = feature;
-  const buffers = { points: flattenLine$1(geometry) };
+  const buffers = { lines: flattenLines$1(geometry) };
 
   return { properties, buffers };
 }
 
-function flattenLine$1(geometry) {
+function flattenLines$1(geometry) {
   let { type, coordinates } = geometry;
 
   switch (type) {
@@ -4217,12 +3968,12 @@ function flattenLinearRing$1(ring) {
 
 function parseCircle(feature) {
   const { geometry, properties } = feature;
-  const buffers = { origins: flattenCircles(geometry) };
+  const buffers = { points: flattenPoints(geometry) };
 
   return { properties, buffers };
 }
 
-function flattenCircles(geometry) {
+function flattenPoints(geometry) {
   const { type, coordinates } = geometry;
 
   switch (type) {
@@ -4330,7 +4081,7 @@ function initProcessor(styles) {
     dict[id] =
       (type === "circle") ? parseCircle
       : (type === "line") ? parseLine
-      : (type === "fill") ? triangulate
+      : (type === "fill") ? parseFill
       : null;
 
     return dict;
@@ -6433,7 +6184,7 @@ function initTileMixer(userParams) {
   const workers = initWorkers(workerPath, params);
   URL.revokeObjectURL(workerPath);
 
-  const getPrepFuncs = initDataPrep(params.layers, params.context);
+  const getPrepFuncs = initDataPrep(params.context);
 
   // Define request function
   function request({ z, x, y, getPriority, callback }) {
@@ -6465,7 +6216,7 @@ function initTileMixer(userParams) {
     function prepData(err, source) {
       if (err) return callback(err);
 
-      const chunks = getPrepFuncs(source, z);
+      const chunks = getPrepFuncs(source);
       chunks.push( () => callback(null, source) );
 
       const prepTaskId = queue.enqueueTask({ getPriority, chunks });

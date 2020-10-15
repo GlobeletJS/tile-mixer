@@ -12,7 +12,7 @@ export function initTileMixer(userParams) {
   const workers = initWorkers(workerPath, params);
   URL.revokeObjectURL(workerPath);
 
-  const getPrepFuncs = initDataPrep(params.layers, params.context);
+  const getPrepFuncs = initDataPrep(params.context);
 
   // Define request function
   function request({ z, x, y, getPriority, callback }) {
@@ -44,7 +44,7 @@ export function initTileMixer(userParams) {
     function prepData(err, source) {
       if (err) return callback(err);
 
-      const chunks = getPrepFuncs(source, z);
+      const chunks = getPrepFuncs(source);
       chunks.push( () => callback(null, source) );
 
       const prepTaskId = queue.enqueueTask({ getPriority, chunks });
