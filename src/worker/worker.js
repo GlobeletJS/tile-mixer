@@ -1,11 +1,10 @@
 import { initSourceProcessor } from "./process.js";
 import { readMVT } from "./read.js";
-import { readGeojsonVT } from "./read.js";
-import geojsonvt from 'geojson-vt';
+import { initGeojson } from "./geojson.js";
 
 const tasks = {};
 var filter = (data) => data;
-var tileIndex = {};
+var readGeojson;
 
 onmessage = function(msgEvent) {
   // The message DATA as sent by the parent thread is now a property 
@@ -18,26 +17,16 @@ onmessage = function(msgEvent) {
       // NOTE: changing global variable!
       filter = initSourceProcessor(payload);
       if (payload.source.type === "geojson") {
-        tileIndex = geojsonvt({
-          "type": "FeatureCollection",
-          "features": payload.source.features
-        }, {
-          extent: 512,
-          maxZoom: 14,
-          minZoom: 0,
-        });
+        readGeojson = initGeojson(payload.source);
       }
       break;
     case "getTile":
-      let callback = (err, result) => process(id, err, result, payload.zoom);
-      let request = {};
-      if (payload.type === "vector") {
-        request = readMVT(payload.href, payload.size, callback);
-      }
-      if (payload.type === "geojson") {
-        request = readGeojsonVT(tileIndex, payload.layerID, 
-          payload.tileX, payload.tileY, payload.zoom, callback);
-      }
+      const { type, zoom, href, size } = payload;
+      let callback = (err, result) => process(id, err, result, zoom);
+      const request =
+        (type === "geojson") ? readGeojson(payload, callback)
+        : (type === "vector") ? readMVT(href, size, callback)
+        : {};
       tasks[id] = { request, status: "requested" };
       break;
     case "cancel":
