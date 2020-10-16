@@ -22,7 +22,6 @@ export function initTileMixer(userParams) {
     const readInfo = {
       type,
       z, x, y,
-      source: params.source,
       layerID: params.layers[0].id,
       size: 512,
     };
