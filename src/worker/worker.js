@@ -21,8 +21,8 @@ onmessage = function(msgEvent) {
       }
       break;
     case "getTile":
-      const { type, zoom, href, size } = payload;
-      let callback = (err, result) => process(id, err, result, zoom);
+      const { type, z, href, size } = payload;
+      let callback = (err, result) => process(id, err, result, z);
       const request =
         (type === "geojson") ? readGeojson(payload, callback)
         : (type === "vector") ? readMVT(href, size, callback)

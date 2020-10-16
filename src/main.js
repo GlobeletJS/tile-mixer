@@ -18,25 +18,15 @@ export function initTileMixer(userParams) {
   function request({ z, x, y, getPriority, callback }) {
     const reqHandle = {};
 
-    var readInfo ={};
-    if (userParams.source.type === "vector") {
-      readInfo = { 
-        type: "vector",
-        href: params.getURL(z, x, y),
-        size: 512, 
-        zoom: z 
-      };
-    } else if (userParams.source.type === "geojson") {
-      readInfo = {
-        type: "geojson",
-        source: userParams.source,
-        layerID: userParams.layers[0].id,
-        size: 512,
-        tileX: x,
-        tileY: y,
-        zoom: z
-      };
-    }
+    const type = params.source.type;
+    const readInfo = {
+      type,
+      z, x, y,
+      source: params.source,
+      layerID: params.layers[0].id,
+      size: 512,
+    };
+    if (type === "vector") readInfo.href = params.getURL(z, x, y);
 
     const readTaskId = workers.startTask(readInfo, prepData);
     reqHandle.abort = () => workers.cancelTask(readTaskId);
@@ -44,18 +34,8 @@ export function initTileMixer(userParams) {
     function prepData(err, source) {
       if (err) return callback(err);
 
-      const chunks = getPrepFuncs(source);
-      chunks.push( () => callback(null, source) );
-
+      const chunks = getPrepFuncs(source, callback);
       const prepTaskId = queue.enqueueTask({ getPriority, chunks });
-
-      if (params.verbose) {
-        console.log("tile-mixer: " + 
-          "tileID " + [z, x, y].join("/") + ", " +
-          "chunks.length = " + chunks.length + ", " +
-          "prepTaskId = " + prepTaskId
-        );
-      }
 
       reqHandle.abort = () => queue.cancelTask(prepTaskId);
     }

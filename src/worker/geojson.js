@@ -14,9 +14,9 @@ export function initGeojson(source) {
 
   return function(tileCoords, callback) {
     // TODO: does geojson-vt always return only one layer?
-    const { layerID, tileX, tileY, zoom } = tileCoords;
+    const { layerID, z, x, y } = tileCoords;
 
-    var tile = tileIndex.getTile(zoom, tileX, tileY);
+    var tile = tileIndex.getTile(z, x, y);
 
     // TODO: is tile.features an array? If so, can we use a map statement here?
     var jsonTile = [];
@@ -28,8 +28,8 @@ export function initGeojson(source) {
     var jsonLayer = {};
     jsonLayer[layerID] =  { "type": "FeatureCollection", "features": jsonTile };
 
-    const errMsg = "ERROR in GeojsonLoader for tile z,x,y = " + 
-      [zoom, tileX, tileY].join(",");
+    const errMsg = "ERROR in GeojsonLoader for tile z,x,y = " +
+      [z, x, y].join(",");
 
     if (jsonLayer[layerID].features.length > 0) {
       setTimeout(() => callback(null, jsonLayer));

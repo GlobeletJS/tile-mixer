@@ -229,16 +229,18 @@ function getIdleWorkerID(workLoads) {
 }
 
 function initDataPrep(context) {
+  const { loadBuffers, loadAtlas } = context;
+
   // Return a function that creates an array of prep calls for a source
-  return function (source) {
-    let { atlas, layers } = source;
+  return function (source, callback) {
+    const { atlas, layers } = source;
 
     const prepTasks = Object.values(layers)
       .map(layer => () => loadFeatures(layer));
 
-    if (atlas) {
-      prepTasks.push(() => { source.atlas = context.loadAtlas(atlas); });
-    }
+    if (atlas) prepTasks.push(() => { source.atlas = loadAtlas(atlas); });
+
+    prepTasks.push(() => callback(null, source));
 
     return prepTasks;
   };
@@ -246,7 +248,7 @@ function initDataPrep(context) {
   function loadFeatures(features) {
     // TODO: make this more functional? Note: keeping feature.properties
     features.forEach(feature => {
-      feature.path = context.loadBuffers(feature.buffers);
+      feature.path = loadBuffers(feature.buffers);
       delete feature.buffers;  // Should we do this?
     });
   }
@@ -6061,9 +6063,9 @@ function initGeojson(source) {
 
   return function(tileCoords, callback) {
     // TODO: does geojson-vt always return only one layer?
-    const { layerID, tileX, tileY, zoom } = tileCoords;
+    const { layerID, z, x, y } = tileCoords;
 
-    var tile = tileIndex.getTile(zoom, tileX, tileY);
+    var tile = tileIndex.getTile(z, x, y);
 
     // TODO: is tile.features an array? If so, can we use a map statement here?
     var jsonTile = [];
@@ -6075,8 +6077,8 @@ function initGeojson(source) {
     var jsonLayer = {};
     jsonLayer[layerID] =  { "type": "FeatureCollection", "features": jsonTile };
 
-    const errMsg = "ERROR in GeojsonLoader for tile z,x,y = " + 
-      [zoom, tileX, tileY].join(",");
+    const errMsg = "ERROR in GeojsonLoader for tile z,x,y = " +
+      [z, x, y].join(",");
 
     if (jsonLayer[layerID].features.length > 0) {
       setTimeout(() => callback(null, jsonLayer));
@@ -6131,8 +6133,8 @@ onmessage = function(msgEvent) {
       }
       break;
     case "getTile":
-      const { type, zoom, href, size } = payload;
-      let callback = (err, result) => process(id, err, result, zoom);
+      const { type, z, href, size } = payload;
+      let callback = (err, result) => process(id, err, result, z);
       const request =
         (type === "geojson") ? readGeojson(payload, callback)
         : (type === "vector") ? readMVT(href, size, callback)
@@ -6195,25 +6197,15 @@ function initTileMixer(userParams) {
   function request({ z, x, y, getPriority, callback }) {
     const reqHandle = {};
 
-    var readInfo ={};
-    if (userParams.source.type === "vector") {
-      readInfo = { 
-        type: "vector",
-        href: params.getURL(z, x, y),
-        size: 512, 
-        zoom: z 
-      };
-    } else if (userParams.source.type === "geojson") {
-      readInfo = {
-        type: "geojson",
-        source: userParams.source,
-        layerID: userParams.layers[0].id,
-        size: 512,
-        tileX: x,
-        tileY: y,
-        zoom: z
-      };
-    }
+    const type = params.source.type;
+    const readInfo = {
+      type,
+      z, x, y,
+      source: params.source,
+      layerID: params.layers[0].id,
+      size: 512,
+    };
+    if (type === "vector") readInfo.href = params.getURL(z, x, y);
 
     const readTaskId = workers.startTask(readInfo, prepData);
     reqHandle.abort = () => workers.cancelTask(readTaskId);
@@ -6221,18 +6213,8 @@ function initTileMixer(userParams) {
     function prepData(err, source) {
       if (err) return callback(err);
 
-      const chunks = getPrepFuncs(source);
-      chunks.push( () => callback(null, source) );
-
+      const chunks = getPrepFuncs(source, callback);
       const prepTaskId = queue.enqueueTask({ getPriority, chunks });
-
-      if (params.verbose) {
-        console.log("tile-mixer: " + 
-          "tileID " + [z, x, y].join("/") + ", " +
-          "chunks.length = " + chunks.length + ", " +
-          "prepTaskId = " + prepTaskId
-        );
-      }
 
       reqHandle.abort = () => queue.cancelTask(prepTaskId);
     }
