@@ -1,16 +1,10 @@
 import geojsonvt from 'geojson-vt';
 
 export function initGeojson(source) {
-  // TODO: shouldn't source already have a data property with valid GeoJSON?
-  const data = {
-    "type": "FeatureCollection",
-    "features": source.features,
-  };
-
   // TODO: should these be taken from payload? Or, are defaults OK?
-  const indexParams = { extent: 512, minZoom: 0, maxZoom: 14 };
+  const indexParams = { extent: 512, minZoom: 0, maxZoom: 14, tolerance: 1 };
 
-  const tileIndex = geojsonvt(data, indexParams);
+  const tileIndex = geojsonvt(source.data, indexParams);
 
   return function(tileCoords, callback) {
     // TODO: does geojson-vt always return only one layer?
@@ -41,26 +35,26 @@ export function initGeojson(source) {
   };
 }
 
-  function geojsonvtToJSON(value) {
-    //http://www.scgis.net/api/ol/v4.1.1/examples/geojson-vt.html
-    if (!value.geometry) return value;
+function geojsonvtToJSON(value) {
+  //http://www.scgis.net/api/ol/v4.1.1/examples/geojson-vt.html
+  if (!value.geometry) return value;
 
-    const geometry = value.geometry;
+  const geometry = value.geometry;
 
-    const types = ['Unknown', 'Point', 'Linestring', 'Polygon'];
+  const types = ['Unknown', 'Point', 'Linestring', 'Polygon'];
 
-    // TODO: What if geometry.length < 1?
-    const type = (geometry.length === 1)
-      ? types[value.type]
-      : 'Multi' + types[value.type];
+  // TODO: What if geometry.length < 1?
+  const type = (geometry.length === 1)
+    ? types[value.type]
+    : 'Multi' + types[value.type];
 
-    const coordinates = 
-      (geometry.length != 1) ? [geometry]
-      : (type === 'MultiPoint') ? geometry[0]
-      : geometry;
+  const coordinates = 
+    (geometry.length != 1) ? [geometry]
+    : (type === 'MultiPoint') ? geometry[0]
+    : geometry;
 
-    return {
-      geometry: { type, coordinates },
-      properties: value.tags
-    };
-  }
+  return {
+    geometry: { type, coordinates },
+    properties: value.tags
+  };
+}

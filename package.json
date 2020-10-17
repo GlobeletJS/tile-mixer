@@ -40,7 +40,7 @@
     "pbf": "^3.2.1",
     "tile-gl": "0.0.5",
     "tile-labeler": "0.0.6",
-    "tile-stencil": "^0.2.4",
+    "tile-stencil": "^0.2.5",
     "vector-tile-esm": "^2.1.1"
   }
 }
