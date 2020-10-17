@@ -1,14 +1,15 @@
 import geojsonvt from 'geojson-vt';
 
-export function initGeojson(source) {
+export function initGeojson(source, styles) {
   // TODO: should these be taken from payload? Or, are defaults OK?
   const indexParams = { extent: 512, minZoom: 0, maxZoom: 14, tolerance: 1 };
-
   const tileIndex = geojsonvt(source.data, indexParams);
+
+  const layerID = styles[0].id;
 
   return function(tileCoords, callback) {
     // TODO: does geojson-vt always return only one layer?
-    const { layerID, z, x, y } = tileCoords;
+    const { z, x, y } = tileCoords;
 
     var tile = tileIndex.getTile(z, x, y);
 

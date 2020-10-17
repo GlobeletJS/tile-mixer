@@ -18,16 +18,7 @@ export function initTileMixer(userParams) {
   function request({ z, x, y, getPriority, callback }) {
     const reqHandle = {};
 
-    const type = params.source.type;
-    const readInfo = {
-      type,
-      z, x, y,
-      layerID: params.layers[0].id,
-      size: 512,
-    };
-    if (type === "vector") readInfo.href = params.getURL(z, x, y);
-
-    const readTaskId = workers.startTask(readInfo, prepData);
+    const readTaskId = workers.startTask({ z, x, y }, prepData);
     reqHandle.abort = () => workers.cancelTask(readTaskId);
 
     function prepData(err, source) {

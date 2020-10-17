@@ -1,32 +1,26 @@
 import { initSourceProcessor } from "./process.js";
-import { readMVT } from "./read.js";
+import { initMVT } from "./mvt.js";
 import { initGeojson } from "./geojson.js";
 
 const tasks = {};
-var filter = (data) => data;
-var readGeojson;
+var loader, filter;
 
 onmessage = function(msgEvent) {
-  // The message DATA as sent by the parent thread is now a property 
-  // of the message EVENT. See
-  // https://developer.mozilla.org/en-US/docs/Web/API/MessageEvent
   const { id, type, payload } = msgEvent.data;
 
   switch (type) {
     case "setup":
       // NOTE: changing global variable!
+      let { styles, glyphEndpoint, source } = payload;
+      loader = (source.type === "geojson")
+        ? initGeojson(source, styles)
+        : initMVT(source);
       filter = initSourceProcessor(payload);
-      if (payload.source.type === "geojson") {
-        readGeojson = initGeojson(payload.source);
-      }
       break;
     case "getTile":
       const { type, z, href, size } = payload;
       let callback = (err, result) => process(id, err, result, z);
-      const request =
-        (type === "geojson") ? readGeojson(payload, callback)
-        : (type === "vector") ? readMVT(href, size, callback)
-        : {};
+      const request = loader(payload, callback);
       tasks[id] = { request, status: "requested" };
       break;
     case "cancel":

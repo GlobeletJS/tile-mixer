@@ -6,11 +6,11 @@ export function setParams(userParams) {
   const {
     threads = 2,
     context,
-    glyphs,
     source,
+    glyphs,
     layers,
-    verbose = false,
     queue = chunkedQueue.init(),
+    verbose = false,
   } = userParams;
 
   // Confirm supplied styles are all vector layers reading from the same source
@@ -24,32 +24,18 @@ export function setParams(userParams) {
 
   if (!source) fail("parameters.source is required!");
 
-  const params = {
-    context,
+  if (source.type === "vector" && !(source.tiles && source.tiles.length)) {
+    fail("no valid vector tile endpoints!");
+  }
+
+  return {
     threads,
+    context,
     source,
     glyphs,
     layers,
     queue,
     verbose,
-  };
-
-  // Construct function to get a tile URL
-  if (source.type === "vector") params.getURL = initUrlFunc(source.tiles);
-
-  return params;
-}
-
-function initUrlFunc(endpoints) {
-  if (!endpoints || !endpoints.length) fail("no valid tile endpoints!");
-
-  // Use a different endpoint for each request
-  var index = 0;
-
-  return function(z, x, y) {
-    index = (index + 1) % endpoints.length;
-    var endpoint = endpoints[index];
-    return endpoint.replace(/{z}/, z).replace(/{x}/, x).replace(/{y}/, y);
   };
 }
 

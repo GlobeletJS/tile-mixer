@@ -4857,24 +4857,26 @@ function readTile(tag, layers, pbf) {
   }
 }
 
-function readMVT(dataHref, size, callback) {
-  // Input dataHref is the path to a file containing a Mapbox Vector Tile
+function initMVT(source) {
+  const getURL = initUrlFunc(source.tiles);
 
-  return xhrGet(dataHref, "arraybuffer", parseMVT);
+  // TODO: use VectorTile.extent. Requires changes in vector-tile-esm, tile-painter
+  const size = 512;
 
-  function parseMVT(err, data) {
-    if (err) return callback(err, data);
-    const tile = new VectorTile(new pbf$1(data));
-    callback(null, mvtToJSON(tile, size));
-  }
-}
+  return function(tileCoords, callback) {
+    const { z, x, y } = tileCoords;
+    const dataHref = getURL(z, x, y);
 
-function mvtToJSON(tile, size) {
-  const jsonLayers = {};
-  Object.values(tile.layers).forEach(layer => {
-    jsonLayers[layer.name] = layer.toGeoJSON(size);
-  });
-  return jsonLayers;
+    return xhrGet(dataHref, "arraybuffer", parseMVT);
+
+    function parseMVT(err, data) {
+      if (err) return callback(err, data);
+      const tile = new VectorTile(new pbf$1(data));
+      const json = Object.values(tile.layers)
+        .reduce((d, l) => (d[l.name] = l.toGeoJSON(size), d), {});
+      callback(null, json);
+    }
+  };
 }
 
 function xhrGet(href, type, callback) {
@@ -4906,6 +4908,17 @@ function xhrGet(href, type, callback) {
   }
 
   return req; // Request can be aborted via req.abort()
+}
+
+function initUrlFunc(endpoints) {
+  // Use a different endpoint for each request
+  var index = 0;
+
+  return function(z, x, y) {
+    index = (index + 1) % endpoints.length;
+    var endpoint = endpoints[index];
+    return endpoint.replace(/{z}/, z).replace(/{x}/, x).replace(/{y}/, y);
+  };
 }
 
 // calculate simplification data using optimized Douglas-Peucker algorithm
@@ -5793,15 +5806,16 @@ function extend$2(dest, src) {
     return dest;
 }
 
-function initGeojson(source) {
+function initGeojson(source, styles) {
   // TODO: should these be taken from payload? Or, are defaults OK?
   const indexParams = { extent: 512, minZoom: 0, maxZoom: 14, tolerance: 1 };
-
   const tileIndex = geojsonvt(source.data, indexParams);
+
+  const layerID = styles[0].id;
 
   return function(tileCoords, callback) {
     // TODO: does geojson-vt always return only one layer?
-    const { layerID, z, x, y } = tileCoords;
+    const { z, x, y } = tileCoords;
 
     var tile = tileIndex.getTile(z, x, y);
 
@@ -5853,30 +5867,24 @@ function geojsonvtToJSON(value) {
 }
 
 const tasks = {};
-var filter = (data) => data;
-var readGeojson;
+var loader, filter;
 
 onmessage = function(msgEvent) {
-  // The message DATA as sent by the parent thread is now a property 
-  // of the message EVENT. See
-  // https://developer.mozilla.org/en-US/docs/Web/API/MessageEvent
   const { id, type, payload } = msgEvent.data;
 
   switch (type) {
     case "setup":
       // NOTE: changing global variable!
+      let { styles, glyphEndpoint, source } = payload;
+      loader = (source.type === "geojson")
+        ? initGeojson(source, styles)
+        : initMVT(source);
       filter = initSourceProcessor(payload);
-      if (payload.source.type === "geojson") {
-        readGeojson = initGeojson(payload.source);
-      }
       break;
     case "getTile":
       const { type, z, href, size } = payload;
       let callback = (err, result) => process(id, err, result, z);
-      const request =
-        (type === "geojson") ? readGeojson(payload, callback)
-        : (type === "vector") ? readMVT(href, size, callback)
-        : {};
+      const request = loader(payload, callback);
       tasks[id] = { request, status: "requested" };
       break;
     case "cancel":
