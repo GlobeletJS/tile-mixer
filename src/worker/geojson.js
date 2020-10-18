@@ -5,32 +5,23 @@ export function initGeojson(source, styles) {
   const indexParams = { extent: 512, minZoom: 0, maxZoom: 14, tolerance: 1 };
   const tileIndex = geojsonvt(source.data, indexParams);
 
+  // TODO: does geojson-vt always return only one layer?
   const layerID = styles[0].id;
 
   return function(tileCoords, callback) {
-    // TODO: does geojson-vt always return only one layer?
     const { z, x, y } = tileCoords;
 
-    var tile = tileIndex.getTile(z, x, y);
+    const tile = tileIndex.getTile(z, x, y);
 
-    // TODO: is tile.features an array? If so, can we use a map statement here?
-    var jsonTile = [];
-    if (tile && tile.features.length > 0) {
-      for (let i = 0; i < tile.features.length; i++) {
-        jsonTile[i] = geojsonvtToJSON(tile.features[i]);
-      }
-    }
-    var jsonLayer = {};
-    jsonLayer[layerID] =  { "type": "FeatureCollection", "features": jsonTile };
+    const err = (!tile || !tile.features || !tile.features.length)
+      ? "ERROR in GeojsonLoader for tile z, x, y = " + [z, x, y].join(", ")
+      : null;
 
-    const errMsg = "ERROR in GeojsonLoader for tile z,x,y = " +
-      [z, x, y].join(",");
+    const layer = { type: "FeatureCollection" };
+    if (!err) layer.features = tile.features.map(geojsonvtToJSON);
 
-    if (jsonLayer[layerID].features.length > 0) {
-      setTimeout(() => callback(null, jsonLayer));
-    } else {
-      setTimeout(() => callback(errMsg));
-    }
+    const json = { [layerID]: layer };
+    setTimeout(() => callback(err, json));
 
     return { abort: () => undefined };
   };
