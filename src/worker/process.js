@@ -1,7 +1,7 @@
 import { getStyleFuncs } from 'tile-stencil';
 import { initSourceFilter } from "./filter-source.js";
 import { initSymbols } from 'tile-labeler';
-import { parseFill, parseLine, parseCircle } from 'tile-gl';
+import { serializers } from 'tile-gl';
 import { initFeatureGrouper } from "./group-features.js";
 
 export function initSourceProcessor({ styles, glyphEndpoint }) {
@@ -34,25 +34,40 @@ export function initSourceProcessor({ styles, glyphEndpoint }) {
 }
 
 function initProcessor(styles) {
-  const transforms = styles.reduce((dict, style) => {
-    let { id, type } = style;
-
-    dict[id] =
-      (type === "circle") ? parseCircle
-      : (type === "line") ? parseLine
-      : (type === "fill") ? parseFill
-      : null;
-
-    return dict;
-  }, {});
+  const transforms = styles
+    .reduce((d, s) => (d[s.id] = serializers[s.type], d), {});
 
   return function(layers) {
     const data = Object.entries(layers).reduce((d, [id, features]) => {
       let transform = transforms[id];
-      if (transform) d[id] = features.map(transform);
+      if (transform) d[id] = addBuffers(features, transform);
       return d;
     }, {});
 
     return Promise.resolve(data);
   }
+}
+
+function addBuffers(features, transform) {
+  return features.map(feature => {
+    const { properties, geometry } = feature;
+    const buffers = transform(feature);
+    if (buffers) return { properties, geometry, buffers };
+  }).filter(f => f !== undefined);
+}
+
+function initCompressor(style) {
+  const { id, interactive } = style;
+  const grouper = initFeatureGrouper(style);
+
+  return function(layer) {
+    const compressed = grouper(layer.features);
+    const newLayer = { extent: layer.extent, compressed };
+    if (interactive) {
+      newLayer.features = layer.features.map(f => {
+        let { properties, geometry } = f;
+        return { properties, geometry };
+      });
+    }
+  };
 }

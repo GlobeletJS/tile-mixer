@@ -38,8 +38,8 @@
     "chunked-queue": "^0.1.2",
     "geojson-vt": "^3.2.1",
     "pbf": "^3.2.1",
-    "tile-gl": "0.0.5",
-    "tile-labeler": "0.0.6",
+    "tile-gl": "0.0.6",
+    "tile-labeler": "0.0.7",
     "tile-stencil": "^0.2.5",
     "vector-tile-esm": "^2.1.1"
   }

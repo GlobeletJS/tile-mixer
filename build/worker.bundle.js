@@ -2276,9 +2276,7 @@ function initShaping(style) {
       (boxOrigin[1] + boxSize[1]) * scalar + textPadding
     ];
 
-    const buffers = { origins, deltas, rects, bbox };
-
-    return { properties: feature.properties, buffers };
+    return { origins, deltas, rects, bbox };
   }
 }
 
@@ -2883,8 +2881,11 @@ function initShapers(styles) {
 
   return function(textLayers, zoom, atlas) {
     const shaped = Object.entries(textLayers).reduce((d, [id, features]) => {
-      d[id] = features.map(f => shapers[id](f, zoom, atlas))
-        .filter(f => f !== undefined);
+      d[id] = features.map(feature => {
+        let { properties, geometry } = feature;
+        let buffers = shapers[id](feature, zoom, atlas);
+        if (buffers) return { properties, geometry, buffers };
+      }).filter(f => f !== undefined);
       return d;
     }, {});
 
@@ -2913,6 +2914,68 @@ function collide(feature, tree) {
 
   tree.insert(box);
   return true; // TODO: drop feature if outside tile?
+}
+
+function parseCircle(feature) {
+  const points = flattenPoints(feature.geometry);
+  if (points) return { points };
+}
+
+function flattenPoints(geometry) {
+  const { type, coordinates } = geometry;
+
+  switch (type) {
+    case "Point":
+      return coordinates;
+    case "MultiPoint":
+      return coordinates.flat();
+    default:
+      return;
+  }
+}
+
+function parseLine(feature) {
+  const lines = flattenLines(feature.geometry);
+  if (lines) return { lines };
+}
+
+function flattenLines(geometry) {
+  let { type, coordinates } = geometry;
+
+  switch (type) {
+    case "LineString":
+      return flattenLineString(coordinates);
+    case "MultiLineString":
+      return coordinates.flatMap(flattenLineString);
+    case "Polygon":
+      return flattenPolygon(coordinates);
+    case "MultiPolygon":
+      return coordinates.flatMap(flattenPolygon);
+    default:
+      return;
+  }
+}
+
+function flattenLineString(line) {
+  return [
+    ...[...line[0], -2.0],
+    ...line.flatMap(([x, y]) => [x, y, 0.0]),
+    ...[...line[line.length - 1], -2.0]
+  ];
+}
+
+function flattenPolygon(rings) {
+  return rings.flatMap(flattenLinearRing);
+}
+
+function flattenLinearRing(ring) {
+  // Definition of linear ring:
+  // ring.length > 3 && ring[ring.length - 1] == ring[0]
+  return [
+    ...[...ring[ring.length - 2], -2.0],
+    ...ring.flatMap(([x, y]) => [x, y, 0.0]),
+    ...[...ring[1], -2.0]
+  ];
 }
 
 var earcut_1 = earcut;
@@ -3594,143 +3657,45 @@ earcut.flatten = function (data) {
 };
 earcut_1.default = default_1;
 
-function flattenLines(geometry) {
-  let { type, coordinates } = geometry;
-
-  switch (type) {
-    case "LineString":
-      return flattenLineString(coordinates);
-    case "MultiLineString":
-      return coordinates.flatMap(flattenLineString);
-    case "Polygon":
-      return flattenPolygon(coordinates);
-    case "MultiPolygon":
-      return coordinates.flatMap(flattenPolygon);
-    default:
-      return;
-  }
-}
-
-function flattenLineString(line) {
-  return [
-    ...[...line[0], -2.0],
-    ...line.flatMap(([x, y]) => [x, y, 0.0]),
-    ...[...line[line.length - 1], -2.0]
-  ];
-}
-
-function flattenPolygon(rings) {
-  return rings.flatMap(flattenLinearRing);
-}
-
-function flattenLinearRing(ring) {
-  // Definition of linear ring:
-  // ring.length > 3 && ring[ring.length - 1] == ring[0]
-  return [
-    ...[...ring[ring.length - 2], -2.0],
-    ...ring.flatMap(([x, y]) => [x, y, 0.0]),
-    ...[...ring[1], -2.0]
-  ];
-}
-
 function parseFill(feature) {
-  const { geometry, properties } = feature;
+  const triangles = triangulate(feature.geometry);
 
-  // Normalize coordinate structure
-  var { type, coordinates } = geometry;
-  if (type === "Polygon") {
-    coordinates = [coordinates];
-  } else if (type !== "MultiPolygon") {
-    return feature; // Triangulation only makes sense for Polygons/MultiPolygons
-  }
-
-  const combined = coordinates
-    .map(coord => {
-      let { vertices, holes, dimensions } = earcut_1.flatten(coord);
-      let indices = earcut_1(vertices, holes, dimensions);
-      return { vertices, indices };
-    })
-    .reduce((accumulator, current) => {
-      let indexShift = accumulator.vertices.length / 2;
-      accumulator.vertices.push(...current.vertices);
-      accumulator.indices.push(...current.indices.map(h => h + indexShift));
-      return accumulator;
-    });
-
-  const buffers = {
-    vertices: combined.vertices,
-    indices: combined.indices,
-    lines: flattenLines(geometry), // For rendering the outline
+  if (triangles) return {
+    vertices: triangles.vertices,
+    indices: triangles.indices,
+    lines: flattenLines(feature.geometry), // For rendering the outline
   };
-
-  return { properties, buffers };
 }
 
-function parseLine(feature) {
-  const { geometry, properties } = feature;
-  const buffers = { lines: flattenLines$1(geometry) };
-
-  return { properties, buffers };
-}
-
-function flattenLines$1(geometry) {
-  let { type, coordinates } = geometry;
-
-  switch (type) {
-    case "LineString":
-      return flattenLineString$1(coordinates);
-    case "MultiLineString":
-      return coordinates.flatMap(flattenLineString$1);
-    case "Polygon":
-      return flattenPolygon$1(coordinates);
-    case "MultiPolygon":
-      return coordinates.flatMap(flattenPolygon$1);
-    default:
-      return;
-  }
-}
-
-function flattenLineString$1(line) {
-  return [
-    ...[...line[0], -2.0],
-    ...line.flatMap(([x, y]) => [x, y, 0.0]),
-    ...[...line[line.length - 1], -2.0]
-  ];
-}
-
-function flattenPolygon$1(rings) {
-  return rings.flatMap(flattenLinearRing$1);
-}
-
-function flattenLinearRing$1(ring) {
-  // Definition of linear ring:
-  // ring.length > 3 && ring[ring.length - 1] == ring[0]
-  return [
-    ...[...ring[ring.length - 2], -2.0],
-    ...ring.flatMap(([x, y]) => [x, y, 0.0]),
-    ...[...ring[1], -2.0]
-  ];
-}
-
-function parseCircle(feature) {
-  const { geometry, properties } = feature;
-  const buffers = { points: flattenPoints(geometry) };
-
-  return { properties, buffers };
-}
-
-function flattenPoints(geometry) {
+function triangulate(geometry) {
   const { type, coordinates } = geometry;
 
   switch (type) {
-    case "Point":
-      return coordinates;
-    case "MultiPoint":
-      return coordinates.flat();
+    case "Polygon":
+      return indexPolygon(coordinates);
+    case "MultiPolygon":
+      return coordinates.map(indexPolygon).reduce((acc, cur) => {
+        let indexShift = acc.vertices.length / 2;
+        acc.vertices.push(...cur.vertices);
+        acc.indices.push(...cur.indices.map(h => h + indexShift));
+        return acc;
+      });
     default:
       return;
   }
 }
+
+function indexPolygon(coords) {
+  let { vertices, holes, dimensions } = earcut_1.flatten(coords);
+  let indices = earcut_1(vertices, holes, dimensions);
+  return { vertices, indices };
+}
+
+const serializers = {
+  circle: parseCircle,
+  line: parseLine,
+  fill: parseFill,
+};
 
 function initFeatureGrouper(style) {
   // Find the names of the feature properties that affect rendering
@@ -3821,27 +3786,26 @@ function initSourceProcessor({ styles, glyphEndpoint }) {
 }
 
 function initProcessor(styles) {
-  const transforms = styles.reduce((dict, style) => {
-    let { id, type } = style;
-
-    dict[id] =
-      (type === "circle") ? parseCircle
-      : (type === "line") ? parseLine
-      : (type === "fill") ? parseFill
-      : null;
-
-    return dict;
-  }, {});
+  const transforms = styles
+    .reduce((d, s) => (d[s.id] = serializers[s.type], d), {});
 
   return function(layers) {
     const data = Object.entries(layers).reduce((d, [id, features]) => {
       let transform = transforms[id];
-      if (transform) d[id] = features.map(transform);
+      if (transform) d[id] = addBuffers(features, transform);
       return d;
     }, {});
 
     return Promise.resolve(data);
   }
+}
+
+function addBuffers(features, transform) {
+  return features.map(feature => {
+    const { properties, geometry } = feature;
+    const buffers = transform(feature);
+    if (buffers) return { properties, geometry, buffers };
+  }).filter(f => f !== undefined);
 }
 
 var read$1 = function (buffer, offset, isLE, mLen, nBytes) {
@@ -5807,8 +5771,7 @@ function extend$2(dest, src) {
 }
 
 function initGeojson(source, styles) {
-  // TODO: should these be taken from payload? Or, are defaults OK?
-  const indexParams = { extent: 512, minZoom: 0, maxZoom: 14, tolerance: 1 };
+  const indexParams = { extent: 512, tolerance: 1 };
   const tileIndex = geojsonvt(source.data, indexParams);
 
   // TODO: does geojson-vt always return only one layer?
@@ -5834,29 +5797,25 @@ function initGeojson(source, styles) {
 }
 
 function geojsonvtToJSON(value) {
-  //http://www.scgis.net/api/ol/v4.1.1/examples/geojson-vt.html
-  if (!value.geometry) return value;
-
-  const geometry = value.geometry;
+  const { geometry, type: typeNum, tags: properties } = value;
+  if (!geometry) return value;
 
   const types = ['Unknown', 'Point', 'LineString', 'Polygon'];
 
-  // TODO: What if geometry.length < 1?
-  const type = (geometry.length === 1)
-    ? types[value.type]
-    : 'Multi' + types[value.type];
+  const type = (geometry.length <= 1)
+    ? types[typeNum]
+    : 'Multi' + types[typeNum];
 
   const coordinates =
-    (type == "MultiPolygon") ? [geometry]                                                                                                                                       : (type === 'Point'|| type === 'LineString') ? geometry[0]                                                                                                                  : geometry;
+    (type == "MultiPolygon") ? [geometry]
+    : (type === 'Point'|| type === 'LineString') ? geometry[0]
+    : geometry;
 
-  return {
-    geometry: { type, coordinates },
-    properties: value.tags
-  };
+  return { geometry: { type, coordinates }, properties };
 }
 
 const tasks = {};
-var loader, filter;
+var loader, processor;
 
 onmessage = function(msgEvent) {
   const { id, type, payload } = msgEvent.data;
@@ -5868,7 +5827,7 @@ onmessage = function(msgEvent) {
       loader = (source.type === "geojson")
         ? initGeojson(source, styles)
         : initMVT(source);
-      filter = initSourceProcessor(payload);
+      processor = initSourceProcessor(payload);
       break;
     case "getTile":
       const { type, z, href, size } = payload;
@@ -5896,7 +5855,7 @@ function process(id, err, result, zoom) {
   }
 
   task.status = "parsing";
-  return filter(result, zoom).then(tile => sendTile(id, tile));
+  return processor(result, zoom).then(tile => sendTile(id, tile));
 }
 
 function sendTile(id, tile) {

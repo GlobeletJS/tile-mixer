@@ -1,8 +1,7 @@
 import geojsonvt from 'geojson-vt';
 
 export function initGeojson(source, styles) {
-  // TODO: should these be taken from payload? Or, are defaults OK?
-  const indexParams = { extent: 512, minZoom: 0, maxZoom: 14, tolerance: 1 };
+  const indexParams = { extent: 512, tolerance: 1 };
   const tileIndex = geojsonvt(source.data, indexParams);
 
   // TODO: does geojson-vt always return only one layer?
@@ -28,23 +27,19 @@ export function initGeojson(source, styles) {
 }
 
 function geojsonvtToJSON(value) {
-  //http://www.scgis.net/api/ol/v4.1.1/examples/geojson-vt.html
-  if (!value.geometry) return value;
-
-  const geometry = value.geometry;
+  const { geometry, type: typeNum, tags: properties } = value;
+  if (!geometry) return value;
 
   const types = ['Unknown', 'Point', 'LineString', 'Polygon'];
 
-  // TODO: What if geometry.length < 1?
-  const type = (geometry.length === 1)
-    ? types[value.type]
-    : 'Multi' + types[value.type];
+  const type = (geometry.length <= 1)
+    ? types[typeNum]
+    : 'Multi' + types[typeNum];
 
   const coordinates =
-    (type == "MultiPolygon") ? [geometry]                                                                                                                                       : (type === 'Point'|| type === 'LineString') ? geometry[0]                                                                                                                  : geometry;
+    (type == "MultiPolygon") ? [geometry]
+    : (type === 'Point'|| type === 'LineString') ? geometry[0]
+    : geometry;
 
-  return {
-    geometry: { type, coordinates },
-    properties: value.tags
-  };
+  return { geometry: { type, coordinates }, properties };
 }

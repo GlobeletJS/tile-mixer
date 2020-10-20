@@ -3,7 +3,7 @@ import { initMVT } from "./mvt.js";
 import { initGeojson } from "./geojson.js";
 
 const tasks = {};
-var loader, filter;
+var loader, processor;
 
 onmessage = function(msgEvent) {
   const { id, type, payload } = msgEvent.data;
@@ -15,7 +15,7 @@ onmessage = function(msgEvent) {
       loader = (source.type === "geojson")
         ? initGeojson(source, styles)
         : initMVT(source);
-      filter = initSourceProcessor(payload);
+      processor = initSourceProcessor(payload);
       break;
     case "getTile":
       const { type, z, href, size } = payload;
@@ -44,7 +44,7 @@ function process(id, err, result, zoom) {
   }
 
   task.status = "parsing";
-  return filter(result, zoom).then(tile => sendTile(id, tile));
+  return processor(result, zoom).then(tile => sendTile(id, tile));
 }
 
 function sendTile(id, tile) {
