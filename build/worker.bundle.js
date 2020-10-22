@@ -772,23 +772,24 @@ function initSourceFilter(styles) {
 }
 
 function initLayerFilter(style) {
-  const { id, type, filter,
+  const { id, type: styleType, filter,
     minzoom = 0, maxzoom = 99,
     "source-layer": sourceLayer,
   } = style;
 
-  const filterObject = composeFilters(getGeomFilter(type), filter);
+  const filterObject = composeFilters(getGeomFilter(styleType), filter);
   const parsedFilter = buildFeatureFilter(filterObject);
 
   return function(source, zoom) {
     // source is a dictionary of FeatureCollections, keyed on source-layer
     if (!source || zoom < minzoom || maxzoom < zoom) return;
 
-    let layer = source[sourceLayer];
+    const layer = source[sourceLayer];
     if (!layer) return;
 
-    let features = layer.features.filter(parsedFilter);
-    if (features.length > 0) return { [id]: features };
+    const { type, extent, features: rawFeatures } = layer;
+    const features = rawFeatures.filter(parsedFilter);
+    if (features.length > 0) return { [id]: { type, extent, features } };
   };
 }
 
@@ -855,15 +856,20 @@ function getTokenParser(tokenText) {
 }
 
 function initText(parsedStyles) {
-  const textGetters = parsedStyles
+  const transforms = parsedStyles
     .filter(s => s.type === "symbol")
     .reduce((d, s) => (d[s.id] = initTextGetter(s), d), {});
 
   return function(layers, zoom) {
-    return Object.entries(layers).reduce((textLayers, [id, features]) => {
-      const getter = textGetters[id];
-      if (getter) textLayers[id] = features.map(f => getter(f, zoom));
-      return textLayers;
+    return Object.entries(layers).reduce((d, [id, layer]) => {
+      const transform = transforms[id];
+      if (!transform) return d;
+      
+      let { type, extent, features } = layer;
+      let mapped = features.map(f => transform(f, zoom));
+
+      if (mapped.length) d[id] = { type, extent, features: mapped };
+      return d;
     }, {});
   };
 }
@@ -1983,7 +1989,9 @@ function initGlyphs(glyphEndpoint) {
   const getAtlas = initGetter(glyphEndpoint);
 
   return function(layers, zoom) {
-    const fonts = Object.values(layers).reduce(collectCharCodes, {});
+    const fonts = Object.values(layers)
+      .map(layer => layer.features)
+      .reduce(collectCharCodes, {});
 
     return getAtlas(fonts);
   };
@@ -2880,18 +2888,21 @@ function initShapers(styles) {
     .reduce((d, s) => (d[s.id] = initShaping(s), d), {});
 
   return function(textLayers, zoom, atlas) {
-    const shaped = Object.entries(textLayers).reduce((d, [id, features]) => {
-      d[id] = features.map(feature => {
+    const shaped = Object.entries(textLayers).reduce((d, [id, layer]) => {
+      let { type, extent, features } = layer;
+      let mapped = features.map(feature => {
         let { properties, geometry } = feature;
         let buffers = shapers[id](feature, zoom, atlas);
         if (buffers) return { properties, geometry, buffers };
       }).filter(f => f !== undefined);
+
+      if (mapped.length) d[id] = { type, extent, features: mapped };
       return d;
     }, {});
 
     const tree = new RBush();
-    Object.entries(shaped).reverse().forEach(([id, features]) => {
-      shaped[id] = features.filter(f => collide(f, tree));
+    Object.values(shaped).reverse().forEach(layer => {
+      layer.features = layer.features.filter(f => collide(f, tree));
     });
 
     return { atlas: atlas.image, layers: shaped };
@@ -3763,7 +3774,7 @@ function initSourceProcessor({ styles, glyphEndpoint }) {
   const process = initProcessor(parsedStyles);
   const processSymbols = initSymbols({ parsedStyles, glyphEndpoint });
   const compressors = parsedStyles
-    .reduce((d, s) => (d[s.id] = initFeatureGrouper(s), d), {});
+    .reduce((d, s) => (d[s.id] = initCompressor(s), d), {});
 
   return function(source, zoom) {
     const rawLayers = sourceFilter(source, zoom);
@@ -3774,9 +3785,9 @@ function initSourceProcessor({ styles, glyphEndpoint }) {
     return Promise.all([mainTask, symbolTask]).then(([layers, symbols]) => {
       // Merge symbol layers into layers dictionary
       Object.assign(layers, symbols.layers);
-      // Compress features
-      Object.entries(layers).forEach(([id, features]) => {
-        layers[id] = compressors[id](features);
+      // Compress features. TODO: don't overwrite layers object!
+      Object.entries(layers).forEach(([id, layer]) => {
+        layers[id] = compressors[id](layer);
       });
       // TODO: what if there is no atlas?
       // Note: atlas.data.buffer is a Transferable
@@ -3790,9 +3801,18 @@ function initProcessor(styles) {
     .reduce((d, s) => (d[s.id] = serializers[s.type], d), {});
 
   return function(layers) {
-    const data = Object.entries(layers).reduce((d, [id, features]) => {
+    const data = Object.entries(layers).reduce((d, [id, layer]) => {
       let transform = transforms[id];
-      if (transform) d[id] = addBuffers(features, transform);
+      if (!transform) return d;
+
+      let { type, extent, features } = layer;
+      let mapped = features.map(feature => {
+        let { properties, geometry } = feature;
+        let buffers = transform(feature);
+        if (buffers) return { properties, geometry, buffers };
+      }).filter(f => f !== undefined);
+
+      if (mapped.length) d[id] = { type, extent, features: mapped };
       return d;
     }, {});
 
@@ -3800,12 +3820,20 @@ function initProcessor(styles) {
   }
 }
 
-function addBuffers(features, transform) {
-  return features.map(feature => {
-    const { properties, geometry } = feature;
-    const buffers = transform(feature);
-    if (buffers) return { properties, geometry, buffers };
-  }).filter(f => f !== undefined);
+function initCompressor(style) {
+  const { id, interactive } = style;
+  const grouper = initFeatureGrouper(style);
+
+  return function(layer) {
+    const { type, extent, features } = layer;
+    const compressed = grouper(features);
+    const newLayer = { type, extent, compressed };
+
+    if (interactive) newLayer.features = features
+      .map(({ properties, geometry }) => ({ properties, geometry }));
+
+    return newLayer;
+  };
 }
 
 var read$1 = function (buffer, offset, isLE, mLen, nBytes) {
@@ -5771,7 +5799,8 @@ function extend$2(dest, src) {
 }
 
 function initGeojson(source, styles) {
-  const indexParams = { extent: 512, tolerance: 1 };
+  const extent = 512; // TODO: reset to 4096? Then tolerance can be default 3
+  const indexParams = { extent, tolerance: 1 };
   const tileIndex = geojsonvt(source.data, indexParams);
 
   // TODO: does geojson-vt always return only one layer?
@@ -5786,7 +5815,7 @@ function initGeojson(source, styles) {
       ? "ERROR in GeojsonLoader for tile z, x, y = " + [z, x, y].join(", ")
       : null;
 
-    const layer = { type: "FeatureCollection" };
+    const layer = { type: "FeatureCollection", extent };
     if (!err) layer.features = tile.features.map(geojsonvtToJSON);
 
     const json = { [layerID]: layer };
@@ -5865,7 +5894,7 @@ function sendTile(id, tile) {
 
   // Get a list of all the Transferable objects
   const transferables = Object.values(tile.layers)
-    .flatMap(features => features.flatMap(getFeatureBuffers));
+    .flatMap(layer => layer.compressed.flatMap(getFeatureBuffers));
   transferables.push(tile.atlas.data.buffer);
 
   postMessage({ id, type: "data", payload: tile }, transferables);

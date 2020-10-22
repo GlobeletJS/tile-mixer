@@ -54,7 +54,7 @@ function sendTile(id, tile) {
 
   // Get a list of all the Transferable objects
   const transferables = Object.values(tile.layers)
-    .flatMap(features => features.flatMap(getFeatureBuffers));
+    .flatMap(layer => layer.compressed.flatMap(getFeatureBuffers));
   transferables.push(tile.atlas.data.buffer);
 
   postMessage({ id, type: "data", payload: tile }, transferables);

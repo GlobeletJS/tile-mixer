@@ -11,7 +11,7 @@ export function initSourceProcessor({ styles, glyphEndpoint }) {
   const process = initProcessor(parsedStyles);
   const processSymbols = initSymbols({ parsedStyles, glyphEndpoint });
   const compressors = parsedStyles
-    .reduce((d, s) => (d[s.id] = initFeatureGrouper(s), d), {});
+    .reduce((d, s) => (d[s.id] = initCompressor(s), d), {});
 
   return function(source, zoom) {
     const rawLayers = sourceFilter(source, zoom);
@@ -22,9 +22,9 @@ export function initSourceProcessor({ styles, glyphEndpoint }) {
     return Promise.all([mainTask, symbolTask]).then(([layers, symbols]) => {
       // Merge symbol layers into layers dictionary
       Object.assign(layers, symbols.layers);
-      // Compress features
-      Object.entries(layers).forEach(([id, features]) => {
-        layers[id] = compressors[id](features);
+      // Compress features. TODO: don't overwrite layers object!
+      Object.entries(layers).forEach(([id, layer]) => {
+        layers[id] = compressors[id](layer);
       });
       // TODO: what if there is no atlas?
       // Note: atlas.data.buffer is a Transferable
@@ -38,9 +38,18 @@ function initProcessor(styles) {
     .reduce((d, s) => (d[s.id] = serializers[s.type], d), {});
 
   return function(layers) {
-    const data = Object.entries(layers).reduce((d, [id, features]) => {
+    const data = Object.entries(layers).reduce((d, [id, layer]) => {
       let transform = transforms[id];
-      if (transform) d[id] = addBuffers(features, transform);
+      if (!transform) return d;
+
+      let { type, extent, features } = layer;
+      let mapped = features.map(feature => {
+        let { properties, geometry } = feature;
+        let buffers = transform(feature);
+        if (buffers) return { properties, geometry, buffers };
+      }).filter(f => f !== undefined);
+
+      if (mapped.length) d[id] = { type, extent, features: mapped };
       return d;
     }, {});
 
@@ -48,26 +57,18 @@ function initProcessor(styles) {
   }
 }
 
-function addBuffers(features, transform) {
-  return features.map(feature => {
-    const { properties, geometry } = feature;
-    const buffers = transform(feature);
-    if (buffers) return { properties, geometry, buffers };
-  }).filter(f => f !== undefined);
-}
-
 function initCompressor(style) {
   const { id, interactive } = style;
   const grouper = initFeatureGrouper(style);
 
   return function(layer) {
-    const compressed = grouper(layer.features);
-    const newLayer = { extent: layer.extent, compressed };
-    if (interactive) {
-      newLayer.features = layer.features.map(f => {
-        let { properties, geometry } = f;
-        return { properties, geometry };
-      });
-    }
+    const { type, extent, features } = layer;
+    const compressed = grouper(features);
+    const newLayer = { type, extent, compressed };
+
+    if (interactive) newLayer.features = features
+      .map(({ properties, geometry }) => ({ properties, geometry }));
+
+    return newLayer;
   };
 }

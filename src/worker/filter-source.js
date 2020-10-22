@@ -9,23 +9,24 @@ export function initSourceFilter(styles) {
 }
 
 function initLayerFilter(style) {
-  const { id, type, filter,
+  const { id, type: styleType, filter,
     minzoom = 0, maxzoom = 99,
     "source-layer": sourceLayer,
   } = style;
 
-  const filterObject = composeFilters(getGeomFilter(type), filter);
+  const filterObject = composeFilters(getGeomFilter(styleType), filter);
   const parsedFilter = buildFeatureFilter(filterObject);
 
   return function(source, zoom) {
     // source is a dictionary of FeatureCollections, keyed on source-layer
     if (!source || zoom < minzoom || maxzoom < zoom) return;
 
-    let layer = source[sourceLayer];
+    const layer = source[sourceLayer];
     if (!layer) return;
 
-    let features = layer.features.filter(parsedFilter);
-    if (features.length > 0) return { [id]: features };
+    const { type, extent, features: rawFeatures } = layer;
+    const features = rawFeatures.filter(parsedFilter);
+    if (features.length > 0) return { [id]: { type, extent, features } };
   };
 }
 

@@ -6,7 +6,7 @@ export function initDataPrep(context) {
     const { atlas, layers } = source;
 
     const prepTasks = Object.values(layers)
-      .map(layer => () => loadFeatures(layer));
+      .map(layer => () => loadFeatures(layer.compressed));
 
     if (atlas) prepTasks.push(() => { source.atlas = loadAtlas(atlas); });
 

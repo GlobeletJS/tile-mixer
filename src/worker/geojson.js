@@ -1,7 +1,8 @@
 import geojsonvt from 'geojson-vt';
 
 export function initGeojson(source, styles) {
-  const indexParams = { extent: 512, tolerance: 1 };
+  const extent = 512; // TODO: reset to 4096? Then tolerance can be default 3
+  const indexParams = { extent, tolerance: 1 };
   const tileIndex = geojsonvt(source.data, indexParams);
 
   // TODO: does geojson-vt always return only one layer?
@@ -16,7 +17,7 @@ export function initGeojson(source, styles) {
       ? "ERROR in GeojsonLoader for tile z, x, y = " + [z, x, y].join(", ")
       : null;
 
-    const layer = { type: "FeatureCollection" };
+    const layer = { type: "FeatureCollection", extent };
     if (!err) layer.features = tile.features.map(geojsonvtToJSON);
 
     const json = { [layerID]: layer };
