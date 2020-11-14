@@ -30,7 +30,7 @@
   },
   "homepage": "https://github.com/GlobeletJS/tile-mixer#readme",
   "devDependencies": {
-    "rollup": "^1.32.1",
+    "rollup": "^2.33.2",
     "rollup-plugin-commonjs": "^10.1.0",
     "rollup-plugin-node-resolve": "^5.2.0"
   },
@@ -38,8 +38,9 @@
     "chunked-queue": "^0.1.2",
     "geojson-vt": "^3.2.1",
     "pbf": "^3.2.1",
-    "tile-gl": "0.0.6",
-    "tile-labeler": "github:GlobeletJS/tile-labeler",
+    "rbush": "^3.0.1",
+    "tile-gl": "^0.0.7",
+    "tile-labeler": "^0.1.0",
     "tile-stencil": "^0.2.5",
     "vector-tile-esm": "^2.1.2"
   }
