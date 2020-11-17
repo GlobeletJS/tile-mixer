@@ -1,11 +1,10 @@
-import { initShaping } from 'tile-labeler';
-import { serializers } from 'tile-gl';
+import { initSerializer } from 'tile-gl';
 import { initFeatureGrouper } from "./group-features.js";
 import RBush from 'rbush';
 
 export function initBufferConstructors(styles) {
   const layerSerializers = styles
-    .reduce((d, s) => (d[s.id] = initSerializer(s), d), {});
+    .reduce((d, s) => (d[s.id] = initLayerSerializer(s), d), {});
 
   return function(layers, zoom, atlas) {
     const tree = new RBush();
@@ -21,12 +20,10 @@ export function initBufferConstructors(styles) {
   };
 }
 
-function initSerializer(style) {
-  const { id, type: styleType, interactive } = style;
+function initLayerSerializer(style) {
+  const { id, interactive } = style;
 
-  const transform = (styleType === "symbol")
-    ? initShaping(style)
-    : serializers[styleType];
+  const transform = initSerializer(style);
 
   if (!transform) return;
 

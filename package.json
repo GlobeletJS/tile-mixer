@@ -39,7 +39,7 @@
     "geojson-vt": "^3.2.1",
     "pbf": "^3.2.1",
     "rbush": "^3.0.1",
-    "tile-gl": "^0.0.7",
+    "tile-gl": "github:GlobeletJS/tile-gl",
     "tile-labeler": "^0.1.0",
     "tile-stencil": "^0.2.5",
     "vector-tile-esm": "^2.1.2"
