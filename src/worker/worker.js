@@ -18,8 +18,8 @@ onmessage = function(msgEvent) {
       processor = initSourceProcessor(payload);
       break;
     case "getTile":
-      const { type, z, href, size } = payload;
-      let callback = (err, result) => process(id, err, result, z);
+      // let { z, x, y } = payload;
+      let callback = (err, result) => process(id, err, result, payload);
       const request = loader(payload, callback);
       tasks[id] = { request, status: "requested" };
       break;
@@ -33,7 +33,7 @@ onmessage = function(msgEvent) {
   }
 }
 
-function process(id, err, result, zoom) {
+function process(id, err, result, tileCoords) {
   // Make sure we still have an active task for this ID
   let task = tasks[id];
   if (!task) return;  // Task must have been canceled
@@ -44,7 +44,7 @@ function process(id, err, result, zoom) {
   }
 
   task.status = "parsing";
-  return processor(result, zoom).then(tile => sendTile(id, tile));
+  return processor(result, tileCoords).then(tile => sendTile(id, tile));
 }
 
 function sendTile(id, tile) {

@@ -10,11 +10,11 @@ export function initSourceProcessor({ styles, glyphEndpoint }) {
   const getAtlas = initAtlasGetter({ parsedStyles, glyphEndpoint });
   const process = initBufferConstructors(parsedStyles);
 
-  return function(source, zoom) {
-    const rawLayers = sourceFilter(source, zoom);
+  return function(source, tileCoords) {
+    const rawLayers = sourceFilter(source, tileCoords.z);
 
-    return getAtlas(rawLayers, zoom).then(atlas => {
-      const layers = process(rawLayers, zoom, atlas);
+    return getAtlas(rawLayers, tileCoords.z).then(atlas => {
+      const layers = process(rawLayers, tileCoords, atlas);
 
       // Note: atlas.data.buffer is a Transferable
       return { atlas: atlas.image, layers };

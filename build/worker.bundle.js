@@ -3077,6 +3077,7 @@ function initShaping(style) {
     // tree is an RBush from the 'rbush' module. NOTE: will be updated!
 
     const buffers = shaper(feature, zoom, atlas);
+    if (!buffers) return;
 
     let { origins: [x0, y0], bbox } = buffers;
     let box = {
@@ -3096,15 +3097,43 @@ function initShaping(style) {
 }
 
 function initSerializer(style) {
+  const { getLen, parse } = initParser(style);
+
+  return function(feature, tileCoords, atlas, tree) {
+    const { z, x, y } = tileCoords;
+
+    const buffers = parse(feature, z, atlas, tree);
+
+    if (buffers) buffers.tileCoords = Array
+      .from({ length: getLen(buffers) })
+      .flatMap(v => [z, x, y]);
+
+    return buffers;
+  };
+}
+
+function initParser(style) {
   switch (style.type) {
     case "circle":
-      return parseCircle;
+      return { 
+        getLen: (b) => b.points.length / 2,
+        parse: parseCircle,
+      };
     case "line":
-      return parseLine;
+      return {
+        getLen: (b) => b.lines.length / 3 - 3,
+        parse: parseLine,
+      };
     case "fill":
-      return parseFill;
+      return {
+        getLen: (b) => b.lines.length / 3 - 3,
+        parse: parseFill,
+      };
     case "symbol":
-      return initShaping(style);
+      return {
+        getLen: (b) => b.origins.length / 2,
+        parse: initShaping(style),
+      };
     default:
       throw Error("tile-gl: unknown serializer type!");
   }
@@ -3738,14 +3767,14 @@ function initBufferConstructors(styles) {
   const layerSerializers = styles
     .reduce((d, s) => (d[s.id] = initLayerSerializer(s), d), {});
 
-  return function(layers, zoom, atlas) {
+  return function(layers, tileCoords, atlas) {
     const tree = new RBush();
 
     return Object.entries(layers)
       .reverse() // Reverse order for collision checks
       .map(([id, layer]) => {
         let serialize = layerSerializers[id];
-        if (serialize) return serialize(layer, zoom, atlas, tree);
+        if (serialize) return serialize(layer, tileCoords, atlas, tree);
       })
       .reverse()
       .reduce((d, l) => Object.assign(d, l), {});
@@ -3761,12 +3790,12 @@ function initLayerSerializer(style) {
 
   const compressor = initFeatureGrouper(style);
 
-  return function(layer, zoom, atlas, tree) {
+  return function(layer, tileCoords, atlas, tree) {
     let { type, extent, features } = layer;
 
     let transformed = features.map(feature => {
       let { properties, geometry } = feature;
-      let buffers = transform(feature, zoom, atlas, tree);
+      let buffers = transform(feature, tileCoords, atlas, tree);
       if (buffers) return { properties, geometry, buffers };
     }).filter(f => f !== undefined);
 
@@ -3789,11 +3818,11 @@ function initSourceProcessor({ styles, glyphEndpoint }) {
   const getAtlas = initAtlasGetter({ parsedStyles, glyphEndpoint });
   const process = initBufferConstructors(parsedStyles);
 
-  return function(source, zoom) {
-    const rawLayers = sourceFilter(source, zoom);
+  return function(source, tileCoords) {
+    const rawLayers = sourceFilter(source, tileCoords.z);
 
-    return getAtlas(rawLayers, zoom).then(atlas => {
-      const layers = process(rawLayers, zoom, atlas);
+    return getAtlas(rawLayers, tileCoords.z).then(atlas => {
+      const layers = process(rawLayers, tileCoords, atlas);
 
       // Note: atlas.data.buffer is a Transferable
       return { atlas: atlas.image, layers };
@@ -5093,8 +5122,8 @@ onmessage = function(msgEvent) {
       processor = initSourceProcessor(payload);
       break;
     case "getTile":
-      const { type, z, href, size } = payload;
-      let callback = (err, result) => process(id, err, result, z);
+      // let { z, x, y } = payload;
+      let callback = (err, result) => process(id, err, result, payload);
       const request = loader(payload, callback);
       tasks[id] = { request, status: "requested" };
       break;
@@ -5107,7 +5136,7 @@ onmessage = function(msgEvent) {
   }
 };
 
-function process(id, err, result, zoom) {
+function process(id, err, result, tileCoords) {
   // Make sure we still have an active task for this ID
   let task = tasks[id];
   if (!task) return;  // Task must have been canceled
@@ -5118,7 +5147,7 @@ function process(id, err, result, zoom) {
   }
 
   task.status = "parsing";
-  return processor(result, zoom).then(tile => sendTile(id, tile));
+  return processor(result, tileCoords).then(tile => sendTile(id, tile));
 }
 
 function sendTile(id, tile) {
