@@ -2980,7 +2980,6 @@ function parseFill(feature) {
   if (triangles) return {
     vertices: triangles.vertices,
     indices: triangles.indices,
-    lines: flattenLines(feature.geometry), // For rendering the outline
   };
 }
 
@@ -3368,7 +3367,7 @@ function initParser(style) {
       };
     case "fill":
       return {
-        getLen: (b) => b.lines.length / 3 - 3,
+        getLen: (b) => b.vertices.length / 2,
         parse: parseFill,
       };
     case "symbol":
