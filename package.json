@@ -41,7 +41,7 @@
     "rbush": "^3.0.1",
     "tile-gl": "github:GlobeletJS/tile-gl",
     "tile-labeler": "^0.1.1",
-    "tile-stencil": "^0.2.5",
+    "tile-stencil": "^0.3.0",
     "vector-tile-esm": "^2.1.2"
   }
 }
