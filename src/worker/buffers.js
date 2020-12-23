@@ -1,5 +1,5 @@
 import { initSerializer } from 'tile-gl';
-import { initFeatureGrouper } from "./group-features.js";
+import { concatBuffers } from "./concat-buffers.js";
 import RBush from 'rbush';
 
 export function initBufferConstructors(styles) {
@@ -27,8 +27,6 @@ function initLayerSerializer(style) {
 
   if (!transform) return;
 
-  const compressor = initFeatureGrouper(style);
-
   return function(layer, tileCoords, atlas, tree) {
     let { type, extent, features } = layer;
 
@@ -42,8 +40,7 @@ function initLayerSerializer(style) {
 
     if (!transformed.length) return;
 
-    const compressed = compressor(transformed);
-    const newLayer = { type, extent, compressed };
+    const newLayer = { type, extent, buffers: concatBuffers(transformed) };
 
     if (interactive) newLayer.features = transformed
       .map(({ properties, geometry }) => ({ properties, geometry }));

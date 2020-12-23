@@ -3186,38 +3186,21 @@ function initSerializer(style) {
   }
 }
 
-function initFeatureGrouper(style) {
-  // Find the names of the feature properties that affect rendering
-  const renderPropertyNames = Object.values(style.paint)
-    .filter(styleFunc => styleFunc.type === "property")
-    .map(styleFunc => styleFunc.property);
-
-  return function(features) {
-    // Group features that will be styled the same
-    const groups = {};
-    features.forEach(feature => {
-      // Keep only the properties relevant to rendering
-      let properties = renderPropertyNames
-        .reduce((d, k) => (d[k] = feature.properties[k], d), {});
-
-      // Look up the appropriate group, or create it if it doesn't exist
-      let key = Object.entries(properties).join();
-      if (!groups[key]) groups[key] = initFeature(feature, properties);
-
-      // Append this features buffers to the grouped feature
-      appendBuffers(groups[key].buffers, feature.buffers);
-    });
-
-    return Object.values(groups).map(makeTypedArrays);
-  };
-}
-
-function initFeature(template, renderProperties) {
-  const properties = Object.assign({}, renderProperties);
-  const buffers = Object.keys(template.buffers)
+function concatBuffers(features) {
+  // Create a new Array for each buffer
+  const arrays = Object.keys(features[0].buffers)
     .reduce((d, k) => (d[k] = [], d), {});
 
-  return { properties, buffers };
+  // Concatenate the buffers from all the features
+  features.forEach(f => appendBuffers(arrays, f.buffers));
+
+  // Convert to TypedArrays
+  return Object.entries(arrays).reduce((d, [key, buffer]) => {
+    d[key] = (key === "indices")
+      ? new Uint32Array(buffer)
+      : new Float32Array(buffer);
+    return d;
+  }, {});
 }
 
 function appendBuffers(buffers, newBuffers) {
@@ -3232,17 +3215,6 @@ function appendBuffers(buffers, newBuffers) {
     let base = buffers[k];
     appendix[k].forEach(a => base.push(a));
   });
-}
-
-function makeTypedArrays(feature) {
-  const { properties, buffers } = feature;
-  // Note: modifying in place!
-  Object.keys(buffers).forEach(key => {
-    buffers[key] = (key === "indices")
-      ? new Uint16Array(buffers[key])
-      : new Float32Array(buffers[key]);
-  });
-  return feature;
 }
 
 function quickselect(arr, k, left, right, compare) {
@@ -3835,8 +3807,6 @@ function initLayerSerializer(style) {
 
   if (!transform) return;
 
-  const compressor = initFeatureGrouper(style);
-
   return function(layer, tileCoords, atlas, tree) {
     let { type, extent, features } = layer;
 
@@ -3850,8 +3820,7 @@ function initLayerSerializer(style) {
 
     if (!transformed.length) return;
 
-    const compressed = compressor(transformed);
-    const newLayer = { type, extent, compressed };
+    const newLayer = { type, extent, buffers: concatBuffers(transformed) };
 
     if (interactive) newLayer.features = transformed
       .map(({ properties, geometry }) => ({ properties, geometry }));
@@ -5206,12 +5175,8 @@ function sendTile(id, tile) {
 
   // Get a list of all the Transferable objects
   const transferables = Object.values(tile.layers)
-    .flatMap(layer => layer.compressed.flatMap(getFeatureBuffers));
+    .flatMap(l => Object.values(l.buffers).map(b => b.buffer));
   transferables.push(tile.atlas.data.buffer);
 
   postMessage({ id, type: "data", payload: tile }, transferables);
-}
-
-function getFeatureBuffers(feature) {
-  return Object.values(feature.buffers).map(b => b.buffer);
 }

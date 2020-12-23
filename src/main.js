@@ -1,18 +1,15 @@
 import { setParams } from "./params.js";
 import { initWorkers } from "./boss.js";
-import { initDataPrep } from "./data-prep.js";
 import workerCode from "../build/worker.bundle.js";
 
 export function initTileMixer(userParams) {
   const params = setParams(userParams);
-  const queue = params.queue;
+  const { queue, context: { loadBuffers, loadAtlas } } = params;
 
   // Initialize workers
   const workerPath = URL.createObjectURL( new Blob([workerCode]) );
   const workers = initWorkers(workerPath, params);
   URL.revokeObjectURL(workerPath);
-
-  const getPrepFuncs = initDataPrep(params.context);
 
   // Define request function
   function request({ z, x, y, getPriority, callback }) {
@@ -31,6 +28,18 @@ export function initTileMixer(userParams) {
     }
 
     return reqHandle;
+  }
+
+  function getPrepFuncs(source, callback) {
+    const { atlas, layers } = source;
+
+    const prepTasks = Object.values(layers)
+      .map(l => () => { l.buffers = loadBuffers(l.buffers); });
+
+    if (atlas) prepTasks.push(() => { source.atlas = loadAtlas(atlas); });
+
+    prepTasks.push(() => callback(null, source));
+    return prepTasks;
   }
 
   // Return API
