@@ -35,7 +35,7 @@ function initFeature(template, renderProperties) {
 function appendBuffers(buffers, newBuffers) {
   const appendix = Object.assign({}, newBuffers);
   if (buffers.indices) {
-    let indexShift = buffers.vertices.length / 2;
+    let indexShift = buffers.position.length / 2;
     appendix.indices = newBuffers.indices.map(i => i + indexShift);
   }
   Object.keys(buffers).forEach(k => {

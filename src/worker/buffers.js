@@ -35,6 +35,8 @@ function initLayerSerializer(style) {
     let transformed = features.map(feature => {
       let { properties, geometry } = feature;
       let buffers = transform(feature, tileCoords, atlas, tree);
+      // NOTE: if no buffers, we don't even want to keep the original
+      // feature--because it won't be visible to the user (not rendered)
       if (buffers) return { properties, geometry, buffers };
     }).filter(f => f !== undefined);
 

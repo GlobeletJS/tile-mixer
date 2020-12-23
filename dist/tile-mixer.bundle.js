@@ -2228,9 +2228,33 @@ function getTextTransform(code) {
   }
 }
 
-function parseCircle(feature) {
-  const points = flattenPoints(feature.geometry);
-  if (points) return { points };
+function initCircleParsing(style) {
+  const { paint } = style;
+
+  const dataFuncs = [
+    [paint["circle-radius"],  "radius"],
+    [paint["circle-color"],   "color"],
+    [paint["circle-opacity"], "opacity"],
+  ].filter(([get, key]) => get.type === "property");
+
+  return function(feature, { z, x, y }) {
+    const circlePos = flattenPoints(feature.geometry);
+    if (!circlePos) return;
+
+    const length = circlePos.length / 2;
+    
+    const buffers = { 
+      circlePos,
+      tileCoords: Array.from({ length }).flatMap(v => [x, y, z]),
+    };
+
+    dataFuncs.forEach(([get, key]) => {
+      let val = get(null, feature);
+      buffers[key] = Array.from({ length }).flatMap(v => val);
+    });
+
+    return buffers;
+  };
 }
 
 function flattenPoints(geometry) {
@@ -2246,9 +2270,33 @@ function flattenPoints(geometry) {
   }
 }
 
-function parseLine(feature) {
-  const lines = flattenLines(feature.geometry);
-  if (lines) return { lines };
+function initLineParsing(style) {
+  const { paint } = style;
+
+  // TODO: check for property-dependence of lineWidth, lineGapWidth
+  const dataFuncs = [
+    [paint["line-color"], "color"],
+    [paint["line-opacity"], "opacity"],
+  ].filter(([get, key]) => get.type === "property");
+
+  return function(feature, { z, x, y }) {
+    const lines = flattenLines(feature.geometry);
+    if (!lines) return;
+
+    const length = lines.length / 3;
+
+    const buffers = {
+      lines,
+      tileCoords: Array.from({ length }).flatMap(v => [x, y, z]),
+    };
+
+    dataFuncs.forEach(([get, key]) => {
+      let val = get(null, feature);
+      buffers[key] = Array.from({ length }).flatMap(v => val);
+    });
+
+    return buffers;
+  };
 }
 
 function flattenLines(geometry) {
@@ -2969,12 +3017,32 @@ earcut.flatten = function (data) {
 };
 earcut_1.default = default_1;
 
-function parseFill(feature) {
-  const triangles = triangulate(feature.geometry);
+function initFillParsing(style) {
+  const { paint } = style;
 
-  if (triangles) return {
-    vertices: triangles.vertices,
-    indices: triangles.indices,
+  const dataFuncs = [
+    [paint["fill-color"],   "color"],
+    [paint["fill-opacity"], "opacity"],
+  ].filter(([get, key]) => get.type === "property");
+
+  return function(feature, { z, x, y }) {
+    const triangles = triangulate(feature.geometry);
+    if (!triangles) return;
+
+    const length = triangles.vertices.length / 2;
+
+    const buffers = {
+      position: triangles.vertices,
+      indices: triangles.indices,
+      tileCoords: Array.from({ length }).flatMap(v => [x, y, z]),
+    };
+
+    dataFuncs.forEach(([get, key]) => {
+      let val = get(null, feature);
+      buffers[key] = Array.from({ length }).flatMap(v => val);
+    });
+
+    return buffers;
   };
 }
 
@@ -3240,9 +3308,7 @@ function trailingWhiteSpace(line) {
   return whitespace[line[len - 1].code];
 }
 
-function initShaper(style) {
-  const layout = style.layout;
-
+function initShaper(layout) {
   return function(feature, zoom, atlas) {
     // For each feature, compute a list of info for each character:
     // - x0, y0  defining overall label position
@@ -3281,16 +3347,16 @@ function initShaper(style) {
     // 5. Compute top left corners of the glyphs in each line,
     //    appending the font size scalar for final positioning
     const scalar = layout["text-size"](zoom, feature) / ONE_EM;
-    const deltas = lines
+    const charPos = lines
       .flatMap((l, i) => layoutLine(l, lineOrigins[i], spacing, scalar));
 
     // 6. Fill in label origins for each glyph. TODO: assumes Point geometry
     const origin = feature.geometry.coordinates.slice();
-    const origins = lines.flat()
+    const labelPos = lines.flat()
       .flatMap(g => origin);
 
     // 7. Collect all the glyph rects
-    const rects = lines.flat()
+    const sdfRect = lines.flat()
       .flatMap(g => Object.values(g.rect));
 
     // 8. Compute bounding box for collision checks
@@ -3302,20 +3368,28 @@ function initShaper(style) {
       (boxOrigin[1] + boxSize[1]) * scalar + textPadding
     ];
 
-    return { origins, deltas, rects, bbox };
+    return { labelPos, charPos, sdfRect, bbox };
   }
 }
 
 function initShaping(style) {
-  const shaper = initShaper(style);
+  const { layout, paint } = style;
 
-  return function(feature, zoom, atlas, tree) {
+  const shaper = initShaper(layout);
+
+  const dataFuncs = [
+    [paint["text-color"],   "color"],
+    [paint["text-opacity"], "opacity"],
+  ].filter(([get, key]) => get.type === "property");
+
+  return function(feature, tileCoords, atlas, tree) {
     // tree is an RBush from the 'rbush' module. NOTE: will be updated!
 
-    const buffers = shaper(feature, zoom, atlas);
+    const { z, x, y } = tileCoords;
+    const buffers = shaper(feature, z, atlas);
     if (!buffers) return;
 
-    let { origins: [x0, y0], bbox } = buffers;
+    let { labelPos: [x0, y0], bbox } = buffers;
     let box = {
       minX: x0 + bbox[0],
       minY: y0 + bbox[1],
@@ -3324,8 +3398,15 @@ function initShaping(style) {
     };
 
     if (tree.collides(box)) return;
-
     tree.insert(box);
+
+    const length = buffers.labelPos.length / 2;
+    buffers.tileCoords = Array.from({ length }).flatMap(v => [x, y, z]);
+
+    dataFuncs.forEach(([get, key]) => {
+      let val = get(null, feature);
+      buffers[key] = Array.from({ length }).flatMap(v => val);
+    });
 
     // TODO: drop if outside tile?
     return buffers;
@@ -3333,43 +3414,15 @@ function initShaping(style) {
 }
 
 function initSerializer(style) {
-  const { getLen, parse } = initParser(style);
-
-  return function(feature, tileCoords, atlas, tree) {
-    const { z, x, y } = tileCoords;
-
-    const buffers = parse(feature, z, atlas, tree);
-
-    if (buffers) buffers.tileCoords = Array
-      .from({ length: getLen(buffers) })
-      .flatMap(v => [x, y, z]);
-
-    return buffers;
-  };
-}
-
-function initParser(style) {
   switch (style.type) {
     case "circle":
-      return { 
-        getLen: (b) => b.points.length / 2,
-        parse: parseCircle,
-      };
+      return initCircleParsing(style);
     case "line":
-      return {
-        getLen: (b) => b.lines.length / 3,
-        parse: parseLine,
-      };
+      return initLineParsing(style);
     case "fill":
-      return {
-        getLen: (b) => b.vertices.length / 2,
-        parse: parseFill,
-      };
+      return initFillParsing(style);
     case "symbol":
-      return {
-        getLen: (b) => b.origins.length / 2,
-        parse: initShaping(style),
-      };
+      return initShaping(style);
     default:
       throw Error("tile-gl: unknown serializer type!");
   }
@@ -3412,7 +3465,7 @@ function initFeature(template, renderProperties) {
 function appendBuffers(buffers, newBuffers) {
   const appendix = Object.assign({}, newBuffers);
   if (buffers.indices) {
-    let indexShift = buffers.vertices.length / 2;
+    let indexShift = buffers.position.length / 2;
     appendix.indices = newBuffers.indices.map(i => i + indexShift);
   }
   Object.keys(buffers).forEach(k => {
@@ -4032,6 +4085,8 @@ function initLayerSerializer(style) {
     let transformed = features.map(feature => {
       let { properties, geometry } = feature;
       let buffers = transform(feature, tileCoords, atlas, tree);
+      // NOTE: if no buffers, we don't even want to keep the original
+      // feature--because it won't be visible to the user (not rendered)
       if (buffers) return { properties, geometry, buffers };
     }).filter(f => f !== undefined);
 
