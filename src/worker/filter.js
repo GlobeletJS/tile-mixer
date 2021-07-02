@@ -1,4 +1,4 @@
-import { buildFeatureFilter } from "./filter-feature.js";
+import { buildFeatureFilter } from 'tile-stencil';
 
 export function initSourceFilter(styles) {
   const filters = styles.map(initLayerFilter);

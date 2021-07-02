@@ -1,5 +1,5 @@
 import { getStyleFuncs } from 'tile-stencil';
-import { initSourceFilter } from "./filter-source.js";
+import { initSourceFilter } from "./filter.js";
 import { initAtlasGetter } from 'tile-labeler';
 import { initBufferConstructors } from "./buffers.js";
 

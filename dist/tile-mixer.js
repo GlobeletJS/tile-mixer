@@ -219,7 +219,7 @@ var workerCode = String.raw`function define(constructor, factory, prototype) {
   prototype.constructor = constructor;
 }
 
-function extend(parent, definition) {
+function extend$2(parent, definition) {
   var prototype = Object.create(parent.prototype);
   for (var key in definition) prototype[key] = definition[key];
   return prototype;
@@ -464,7 +464,7 @@ function Rgb(r, g, b, opacity) {
   this.opacity = +opacity;
 }
 
-define(Rgb, rgb, extend(Color, {
+define(Rgb, rgb, extend$2(Color, {
   brighter: function(k) {
     k = k == null ? brighter : Math.pow(brighter, k);
     return new Rgb(this.r * k, this.g * k, this.b * k, this.opacity);
@@ -550,7 +550,7 @@ function Hsl(h, s, l, opacity) {
   this.opacity = +opacity;
 }
 
-define(Hsl, hsl, extend(Color, {
+define(Hsl, hsl, extend$2(Color, {
   brighter: function(k) {
     k = k == null ? brighter : Math.pow(brighter, k);
     return new Hsl(this.h, this.s, this.l * k, this.opacity);
@@ -884,19 +884,9 @@ const paintDefaults = {
   },
 };
 
-function getStyleFuncs(inputLayer) {
-  const layer = Object.assign({}, inputLayer); // Leave input unchanged
-
-  // Replace rendering properties with functions
-  layer.layout = autoGetters(layer.layout, layoutDefaults[layer.type]);
-  layer.paint  = autoGetters(layer.paint,  paintDefaults[layer.type] );
-
-  return layer;
-}
-
 function buildFeatureFilter(filterObj) {
   // filterObj is a filter definition following the "deprecated" syntax:
-  // https://docs.mapbox.com/mapbox-gl-js/style-spec/#other-filter
+  // https://maplibre.org/maplibre-gl-js-docs/style-spec/other/#other-filter
   if (!filterObj) return () => true;
   const [type, ...vals] = filterObj;
 
@@ -974,6 +964,16 @@ function initFeatureValGetter(key) {
   }
 }
 
+function getStyleFuncs(inputLayer) {
+  const layer = Object.assign({}, inputLayer); // Leave input unchanged
+
+  // Replace rendering properties with functions
+  layer.layout = autoGetters(layer.layout, layoutDefaults[layer.type]);
+  layer.paint  = autoGetters(layer.paint,  paintDefaults[layer.type] );
+
+  return layer;
+}
+
 function initSourceFilter(styles) {
   const filters = styles.map(initLayerFilter);
 
@@ -1025,8 +1025,11 @@ function getGeomFilter(type) {
   }
 }
 
+var ieee754$1 = {};
+
 /*! ieee754. BSD-3-Clause License. Feross Aboukhadijeh <https://feross.org/opensource> */
-var read = function (buffer, offset, isLE, mLen, nBytes) {
+
+ieee754$1.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m;
   var eLen = (nBytes * 8) - mLen - 1;
   var eMax = (1 << eLen) - 1;
@@ -1059,7 +1062,7 @@ var read = function (buffer, offset, isLE, mLen, nBytes) {
   return (s ? -1 : 1) * m * Math.pow(2, e - mLen)
 };
 
-var write = function (buffer, value, offset, isLE, mLen, nBytes) {
+ieee754$1.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   var e, m, c;
   var eLen = (nBytes * 8) - mLen - 1;
   var eMax = (1 << eLen) - 1;
@@ -1111,14 +1114,9 @@ var write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128;
 };
 
-var ieee754 = {
-	read: read,
-	write: write
-};
-
 var pbf = Pbf;
 
-
+var ieee754 = ieee754$1;
 
 function Pbf(buf) {
     this.buf = ArrayBuffer.isView && ArrayBuffer.isView(buf) ? buf : new Uint8Array(buf || 0);
@@ -1842,7 +1840,7 @@ function outOfRange(point, size, image) {
   );
 }
 
-const GLYPH_PBF_BORDER = 3;
+const GLYPH_PBF_BORDER$1 = 3;
 
 function parseGlyphPbf(data) {
   // See mapbox-gl-js/src/style/parse_glyph_pbf.js
@@ -1860,7 +1858,7 @@ function readFontstack(tag, glyphs, pbf) {
   const glyph = pbf.readMessage(readGlyph, {});
   const { id, bitmap, width, height, left, top, advance } = glyph;
 
-  const borders = 2 * GLYPH_PBF_BORDER;
+  const borders = 2 * GLYPH_PBF_BORDER$1;
   const size = { width: width + borders, height: height + borders };
 
   glyphs.push({
@@ -2010,7 +2008,7 @@ function potpack(boxes) {
     };
 }
 
-const ATLAS_PADDING = 1;
+const ATLAS_PADDING$1 = 1;
 
 function buildAtlas(fonts) {
   // See mapbox-gl-js/src/render/glyph_atlas.js
@@ -2052,8 +2050,8 @@ function getPosition(glyph) {
   if (width === 0 || height === 0) return;
 
   // Construct a preliminary rect, positioned at the origin for now
-  let w = width + 2 * ATLAS_PADDING;
-  let h = height + 2 * ATLAS_PADDING;
+  let w = width + 2 * ATLAS_PADDING$1;
+  let h = height + 2 * ATLAS_PADDING$1;
   let rect = { x: 0, y: 0, w, h };
 
   return { metrics, rect };
@@ -2066,7 +2064,7 @@ function copyGlyphBitmap(glyph, positions, image) {
 
   let srcPt = { x: 0, y: 0 };
   let { x, y } = position.rect;
-  let dstPt = { x: x + ATLAS_PADDING, y: y + ATLAS_PADDING };
+  let dstPt = { x: x + ATLAS_PADDING$1, y: y + ATLAS_PADDING$1 };
   AlphaImage.copy(bitmap, image, srcPt, dstPt, bitmap);
 }
 
@@ -2312,8 +2310,10 @@ function flattenLinearRing(ring) {
   ];
 }
 
-var earcut_1 = earcut;
-var default_1 = earcut;
+var earcut$2 = {exports: {}};
+
+earcut$2.exports = earcut;
+earcut$2.exports.default = earcut;
 
 function earcut(data, holeIndices, dim) {
 
@@ -2358,7 +2358,7 @@ function earcut(data, holeIndices, dim) {
 function linkedList(data, start, end, dim, clockwise) {
     var i, last;
 
-    if (clockwise === (signedArea(data, start, end, dim) > 0)) {
+    if (clockwise === (signedArea$1(data, start, end, dim) > 0)) {
         for (i = start; i < end; i += dim) last = insertNode(i, data[i], data[i + 1], last);
     } else {
         for (i = end - dim; i >= start; i -= dim) last = insertNode(i, data[i], data[i + 1], last);
@@ -2528,7 +2528,7 @@ function cureLocalIntersections(start, triangles, dim) {
         var a = p.prev,
             b = p.next.next;
 
-        if (!equals(a, b) && intersects(a, p, p.next, b) && locallyInside(a, b) && locallyInside(b, a)) {
+        if (!equals(a, b) && intersects$1(a, p, p.next, b) && locallyInside(a, b) && locallyInside(b, a)) {
 
             triangles.push(a.i / dim);
             triangles.push(p.i / dim);
@@ -2803,7 +2803,7 @@ function equals(p1, p2) {
 }
 
 // check if two segments intersect
-function intersects(p1, q1, p2, q2) {
+function intersects$1(p1, q1, p2, q2) {
     var o1 = sign(area(p1, q1, p2));
     var o2 = sign(area(p1, q1, q2));
     var o3 = sign(area(p2, q2, p1));
@@ -2833,7 +2833,7 @@ function intersectsPolygon(a, b) {
     var p = a;
     do {
         if (p.i !== a.i && p.next.i !== a.i && p.i !== b.i && p.next.i !== b.i &&
-                intersects(p, p.next, a, b)) return true;
+                intersects$1(p, p.next, a, b)) return true;
         p = p.next;
     } while (p !== a);
 
@@ -2940,12 +2940,12 @@ earcut.deviation = function (data, holeIndices, dim, triangles) {
     var hasHoles = holeIndices && holeIndices.length;
     var outerLen = hasHoles ? holeIndices[0] * dim : data.length;
 
-    var polygonArea = Math.abs(signedArea(data, 0, outerLen, dim));
+    var polygonArea = Math.abs(signedArea$1(data, 0, outerLen, dim));
     if (hasHoles) {
         for (var i = 0, len = holeIndices.length; i < len; i++) {
             var start = holeIndices[i] * dim;
             var end = i < len - 1 ? holeIndices[i + 1] * dim : data.length;
-            polygonArea -= Math.abs(signedArea(data, start, end, dim));
+            polygonArea -= Math.abs(signedArea$1(data, start, end, dim));
         }
     }
 
@@ -2963,7 +2963,7 @@ earcut.deviation = function (data, holeIndices, dim, triangles) {
         Math.abs((trianglesArea - polygonArea) / polygonArea);
 };
 
-function signedArea(data, start, end, dim) {
+function signedArea$1(data, start, end, dim) {
     var sum = 0;
     for (var i = start, j = end - dim; i < end; i += dim) {
         sum += (data[j] - data[i]) * (data[i + 1] + data[j + 1]);
@@ -2989,7 +2989,8 @@ earcut.flatten = function (data) {
     }
     return result;
 };
-earcut_1.default = default_1;
+
+var earcut$1 = earcut$2.exports;
 
 function initFillParsing(style) {
   const { paint } = style;
@@ -3039,17 +3040,17 @@ function triangulate(geometry) {
 }
 
 function indexPolygon(coords) {
-  let { vertices, holes, dimensions } = earcut_1.flatten(coords);
-  let indices = earcut_1(vertices, holes, dimensions);
+  let { vertices, holes, dimensions } = earcut$1.flatten(coords);
+  let indices = earcut$1(vertices, holes, dimensions);
   return { vertices, indices };
 }
 
-const GLYPH_PBF_BORDER$1 = 3;
+const GLYPH_PBF_BORDER = 3;
 const ONE_EM = 24;
 
-const ATLAS_PADDING$1 = 1;
+const ATLAS_PADDING = 1;
 
-const RECT_BUFFER = GLYPH_PBF_BORDER$1 + ATLAS_PADDING$1;
+const RECT_BUFFER = GLYPH_PBF_BORDER + ATLAS_PADDING;
 
 function layoutLine(glyphs, origin, spacing, scalar) {
   var xCursor = origin[0];
@@ -3503,7 +3504,7 @@ class RBush {
         let node = this.data;
         const result = [];
 
-        if (!intersects$1(bbox, node)) return result;
+        if (!intersects(bbox, node)) return result;
 
         const toBBox = this.toBBox;
         const nodesToSearch = [];
@@ -3513,7 +3514,7 @@ class RBush {
                 const child = node.children[i];
                 const childBBox = node.leaf ? toBBox(child) : child;
 
-                if (intersects$1(bbox, childBBox)) {
+                if (intersects(bbox, childBBox)) {
                     if (node.leaf) result.push(child);
                     else if (contains(bbox, childBBox)) this._all(child, result);
                     else nodesToSearch.push(child);
@@ -3528,7 +3529,7 @@ class RBush {
     collides(bbox) {
         let node = this.data;
 
-        if (!intersects$1(bbox, node)) return false;
+        if (!intersects(bbox, node)) return false;
 
         const nodesToSearch = [];
         while (node) {
@@ -3536,7 +3537,7 @@ class RBush {
                 const child = node.children[i];
                 const childBBox = node.leaf ? this.toBBox(child) : child;
 
-                if (intersects$1(bbox, childBBox)) {
+                if (intersects(bbox, childBBox)) {
                     if (node.leaf || contains(bbox, childBBox)) return true;
                     nodesToSearch.push(child);
                 }
@@ -3674,7 +3675,7 @@ class RBush {
         if (N <= M) {
             // reached leaf level; return leaf
             node = createNode(items.slice(left, right + 1));
-            calcBBox(node, this.toBBox);
+            calcBBox$1(node, this.toBBox);
             return node;
         }
 
@@ -3712,7 +3713,7 @@ class RBush {
             }
         }
 
-        calcBBox(node, this.toBBox);
+        calcBBox$1(node, this.toBBox);
 
         return node;
     }
@@ -3790,8 +3791,8 @@ class RBush {
         newNode.height = node.height;
         newNode.leaf = node.leaf;
 
-        calcBBox(node, this.toBBox);
-        calcBBox(newNode, this.toBBox);
+        calcBBox$1(node, this.toBBox);
+        calcBBox$1(newNode, this.toBBox);
 
         if (level) insertPath[level - 1].children.push(newNode);
         else this._splitRoot(node, newNode);
@@ -3802,7 +3803,7 @@ class RBush {
         this.data = createNode([node, newNode]);
         this.data.height = node.height + 1;
         this.data.leaf = false;
-        calcBBox(this.data, this.toBBox);
+        calcBBox$1(this.data, this.toBBox);
     }
 
     _chooseSplitIndex(node, m, M) {
@@ -3889,7 +3890,7 @@ class RBush {
 
                 } else this.clear();
 
-            } else calcBBox(path[i], this.toBBox);
+            } else calcBBox$1(path[i], this.toBBox);
         }
     }
 }
@@ -3904,7 +3905,7 @@ function findItem(item, items, equalsFn) {
 }
 
 // calculate node's bbox from bboxes of its children
-function calcBBox(node, toBBox) {
+function calcBBox$1(node, toBBox) {
     distBBox(node, 0, node.children.length, toBBox, node);
 }
 
@@ -3960,7 +3961,7 @@ function contains(a, b) {
            b.maxY <= a.maxY;
 }
 
-function intersects$1(a, b) {
+function intersects(a, b) {
     return b.minX <= a.maxX &&
            b.minY <= a.maxY &&
            b.maxX >= a.minX &&
@@ -4072,7 +4073,7 @@ function classifyRings(rings) {
   var polygon, ccw;
 
   rings.forEach(ring => {
-    let area = signedArea$1(ring);
+    let area = signedArea(ring);
     if (area === 0) return;
 
     if (ccw === undefined) ccw = area < 0;
@@ -4090,7 +4091,7 @@ function classifyRings(rings) {
   return polygons;
 }
 
-function signedArea$1(ring) {
+function signedArea(ring) {
   const xmul = (p1, p2) => (p2.x - p1.x) * (p1.y + p2.y);
 
   const initialValue = xmul(ring[0], ring[ring.length - 1]);
@@ -4486,11 +4487,11 @@ function createFeature(id, type, geom, tags) {
         maxX: -Infinity,
         maxY: -Infinity
     };
-    calcBBox$1(feature);
+    calcBBox(feature);
     return feature;
 }
 
-function calcBBox$1(feature) {
+function calcBBox(feature) {
     var geom = feature.geometry;
     var type = feature.type;
 
@@ -5106,7 +5107,7 @@ function geojsonvt(data, options) {
 }
 
 function GeoJSONVT(data, options) {
-    options = this.options = extend$2(Object.create(this.options), options);
+    options = this.options = extend(Object.create(this.options), options);
 
     var debug = options.debug;
 
@@ -5290,7 +5291,7 @@ function toID(z, x, y) {
     return (((1 << z) * y + x) * 32) + z;
 }
 
-function extend$2(dest, src) {
+function extend(dest, src) {
     for (var i in src) dest[i] = src[i];
     return dest;
 }
