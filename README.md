@@ -1,5 +1,7 @@
 # tile-mixer
 
+![tests](https://github.com/GlobeletJS/tile-mixer/actions/workflows/node.js.yml/badge.svg)
+
 Load vector tiles, re-mixing the layers based on a MapLibre style document
 
 Tiles are requested (via HTTP) from the URL endpoints specified in one of the

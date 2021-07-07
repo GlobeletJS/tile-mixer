@@ -18,13 +18,13 @@ export function concatBuffers(features) {
 function appendBuffers(buffers, newBuffers) {
   const appendix = Object.assign({}, newBuffers);
   if (buffers.indices) {
-    let indexShift = buffers.position.length / 2;
+    const indexShift = buffers.position.length / 2;
     appendix.indices = newBuffers.indices.map(i => i + indexShift);
   }
   Object.keys(buffers).forEach(k => {
     // NOTE: The 'obvious' buffers[k].push(...appendix[k]) fails with
     //  the error "Maximum call stack size exceeded"
-    let base = buffers[k];
+    const base = buffers[k];
     appendix[k].forEach(a => base.push(a));
   });
 }

@@ -1,6 +1,6 @@
-import { initSerializer } from 'tile-gl';
+import { initSerializer } from "tile-gl";
 import { concatBuffers } from "./concat-buffers.js";
-import RBush from 'rbush';
+import RBush from "rbush";
 
 export function initBufferConstructors(styles) {
   const layerSerializers = styles
@@ -12,7 +12,7 @@ export function initBufferConstructors(styles) {
     return Object.entries(layers)
       .reverse() // Reverse order for collision checks
       .map(([id, layer]) => {
-        let serialize = layerSerializers[id];
+        const serialize = layerSerializers[id];
         if (serialize) return serialize(layer, tileCoords, atlas, tree);
       })
       .reverse()
@@ -28,11 +28,11 @@ function initLayerSerializer(style) {
   if (!transform) return;
 
   return function(layer, tileCoords, atlas, tree) {
-    let { type, extent, features } = layer;
+    const { type, extent, features } = layer;
 
-    let transformed = features.map(feature => {
-      let { properties, geometry } = feature;
-      let buffers = transform(feature, tileCoords, atlas, tree);
+    const transformed = features.map(feature => {
+      const { properties, geometry } = feature;
+      const buffers = transform(feature, tileCoords, atlas, tree);
       // NOTE: if no buffers, we don't even want to keep the original
       // feature--because it won't be visible to the user (not rendered)
       if (buffers) return { properties, geometry, buffers };

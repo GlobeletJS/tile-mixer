@@ -53,12 +53,12 @@ function init() {
   function enqueueTask(newTask) {
     const defaultPriority = () => 0;
     taskId += 1;
-    tasks.push({ 
+    tasks.push({
       id: taskId,
       getPriority: newTask.getPriority || defaultPriority,
       chunks: newTask.chunks,
     });
-    if (!queueIsRunning) setZeroTimeout(runTaskQueue);
+    if (!queueIsRunning) window.setZeroTimeout(runTaskQueue);
     return taskId;
   }
 
@@ -87,7 +87,7 @@ function init() {
     let chunk = tasks[0].chunks.shift();
     chunk();
 
-    setZeroTimeout(runTaskQueue);
+    window.setZeroTimeout(runTaskQueue);
   }
 
   function isDone(task) {
@@ -111,10 +111,10 @@ function setParams(userParams) {
   // Confirm supplied styles are all vector layers reading from the same source
   if (!layers || !layers.length) fail("no valid array of style layers!");
 
-  let allVectors = layers.every( l => vectorTypes.includes(l.type) );
+  const allVectors = layers.every( l => vectorTypes.includes(l.type) );
   if (!allVectors) fail("not all layers are vector types!");
 
-  let sameSource = layers.every( l => l.source === layers[0].source );
+  const sameSource = layers.every( l => l.source === layers[0].source );
   if (!sameSource) fail("supplied layers use different sources!");
 
   if (!source) fail("parameters.source is required!");
@@ -160,10 +160,10 @@ function initWorkers(codeHref, params) {
     cancelTask,
     activeTasks: () => workLoads.reduce( (a, b) => a + b, 0 ),
     terminate: () => workers.forEach( worker => worker.terminate() ),
-  }
+  };
 
   function startTask(payload, callback) {
-    let workerID = getIdleWorkerID(workLoads);
+    const workerID = getIdleWorkerID(workLoads);
     workLoads[workerID] += 1;
 
     msgId += 1;
@@ -174,7 +174,7 @@ function initWorkers(codeHref, params) {
   }
 
   function cancelTask(id) {
-    let task = tasks[id];
+    const task = tasks[id];
     if (!task) return;
     workers[task.workerID].postMessage({ id, type: "cancel" });
     workLoads[task.workerID] -= 1;
@@ -618,7 +618,7 @@ function buildInterpolator(stops, base = 1) {
     let [x1, y1] = stops[iz];
 
     return interpolate(y0, scale(x0, x, x1), y1);
-  }
+  };
 }
 
 function getType(v) {
@@ -660,7 +660,7 @@ function getInterpolator(type) {
         v1.map((v, i) => v + t * (v2[i] - v));
 
     default:       // Assume step function
-      return (v1, t, v2) => v1;
+      return (v1) => v1;
   }
 }
 
@@ -694,14 +694,14 @@ function getStyleFunc(style) {
   const { type, property = "zoom", base = 1, stops } = style;
 
   const getArg = (property === "zoom")
-    ? (zoom, feature) => zoom
+    ? (zoom) => zoom
     : (zoom, feature) => feature.properties[property];
 
   const getVal = (type === "identity")
     ? convertIfColor
     : buildInterpolator(stops, base);
 
-  if (!getVal) return console.log("style: " + JSON.stringify(style) + 
+  if (!getVal) return console.log("style: " + JSON.stringify(style) +
     "\nERROR in tile-stencil: unsupported style!");
 
   const styleFunc = (zoom, feature) => getVal(getArg(zoom, feature));
@@ -871,7 +871,11 @@ const paintDefaults = {
     "heatmap-radius": 30,
     "heatmap-weight": 1,
     "heatmap-intensity": 1,
-    "heatmap-color": ["interpolate",["linear"],["heatmap-density"],0,"rgba(0, 0, 255,0)",0.1,"royalblue",0.3,"cyan",0.5,"lime",0.7,"yellow",1,"red"],
+    "heatmap-color": [
+      "interpolate", ["linear"], ["heatmap-density"],
+      0, "rgba(0, 0, 255,0)", 0.1, "royalblue", 0.3, "cyan",
+      0.5, "lime", 0.7, "yellow", 1, "red"
+    ],
     "heatmap-opacity": 1,
   },
   "hillshade": {
@@ -885,7 +889,7 @@ const paintDefaults = {
 };
 
 function buildFeatureFilter(filterObj) {
-  // filterObj is a filter definition following the "deprecated" syntax:
+  // filterObj is a filter definition following the 'deprecated' syntax:
   // https://maplibre.org/maplibre-gl-js-docs/style-spec/other/#other-filter
   if (!filterObj) return () => true;
   const [type, ...vals] = filterObj;
@@ -915,13 +919,13 @@ function getSimpleFilter(filterObj) {
 
   switch (type) {
     // Existential Filters
-    case "has": 
+    case "has":
       return d => !!getVal(d); // !! forces a Boolean return
-    case "!has": 
+    case "!has":
       return d => !getVal(d);
 
     // Comparison Filters
-    case "==": 
+    case "==":
       return d => getVal(d) === vals[0];
     case "!=":
       return d => getVal(d) !== vals[0];
@@ -1756,7 +1760,7 @@ function writeUtf8(buf, str, pos) {
 }
 
 class AlphaImage {
-  // See mapbox-gl-js/src/util/image.js
+  // See maplibre-gl-js/src/util/image.js
   constructor(size, data) {
     createImage(this, size, 1, data);
   }
@@ -1781,7 +1785,7 @@ function createImage(image, { width, height }, channels, data) {
   if (!data) {
     data = new Uint8Array(width * height * channels);
   } else if (data.length !== width * height * channels) {
-    throw new RangeError('mismatched image size');
+    throw new RangeError("mismatched image size");
   }
   return Object.assign(image, { width, height, data });
 }
@@ -1789,7 +1793,7 @@ function createImage(image, { width, height }, channels, data) {
 function resizeImage(image, { width, height }, channels) {
   if (width === image.width && height === image.height) return;
 
-  const size = { 
+  const size = {
     width: Math.min(image.width, width),
     height: Math.min(image.height, height),
   };
@@ -1805,10 +1809,10 @@ function copyImage(srcImg, dstImg, srcPt, dstPt, size, channels) {
   if (size.width === 0 || size.height === 0) return dstImg;
 
   if (outOfRange(srcPt, size, srcImg)) {
-    throw new RangeError('out of range source coordinates for image copy');
+    throw new RangeError("out of range source coordinates for image copy");
   }
   if (outOfRange(dstPt, size, dstImg)) {
-    throw new RangeError('out of range destination coordinates for image copy');
+    throw new RangeError("out of range destination coordinates for image copy");
   }
 
   const srcData = srcImg.data;
@@ -1843,7 +1847,7 @@ function outOfRange(point, size, image) {
 const GLYPH_PBF_BORDER$1 = 3;
 
 function parseGlyphPbf(data) {
-  // See mapbox-gl-js/src/style/parse_glyph_pbf.js
+  // See maplibre-gl-js/src/style/parse_glyph_pbf.js
   // Input is an ArrayBuffer, which will be read as a Uint8Array
   return new pbf(data).readFields(readFontstacks, []);
 }
@@ -1885,8 +1889,8 @@ function initGlyphCache(endpoint) {
     const first = range * 256;
     const last = first + 255;
     const href = endpoint
-      .replace('{fontstack}', font.split(" ").join("%20"))
-      .replace('{range}', first + "-" + last);
+      .replace("{fontstack}", font.split(" ").join("%20"))
+      .replace("{range}", first + "-" + last);
 
     return fetch(href)
       .then(getArrayBuffer)
@@ -1896,7 +1900,7 @@ function initGlyphCache(endpoint) {
 
   return function(font, code) {
     // 1. Find the 256-char block containing this code
-    if (code > 65535) throw Error('glyph codes > 65535 not supported');
+    if (code > 65535) throw Error("glyph codes > 65535 not supported");
     const range = Math.floor(code / 256);
 
     // 2. Get the Promise for the retrieval and parsing of the block
@@ -2011,7 +2015,7 @@ function potpack(boxes) {
 const ATLAS_PADDING$1 = 1;
 
 function buildAtlas(fonts) {
-  // See mapbox-gl-js/src/render/glyph_atlas.js
+  // See maplibre-gl-js/src/render/glyph_atlas.js
 
   // Construct position objects (metrics and rects) for each glyph
   const positions = Object.entries(fonts)
@@ -2058,7 +2062,7 @@ function getPosition(glyph) {
 }
 
 function copyGlyphBitmap(glyph, positions, image) {
-  let { id, bitmap, metrics } = glyph;
+  let { id, bitmap } = glyph;
   let position = positions[id];
   if (!position) return;
 
@@ -2078,7 +2082,7 @@ function initGetter(urlTemplate, key) {
 
   // Put in the API key, if supplied
   const endpoint = (key)
-    ? urlTemplate.replace('{key}', key)
+    ? urlTemplate.replace("{key}", key)
     : urlTemplate;
 
   const getGlyph = initGlyphCache(endpoint);
@@ -2116,12 +2120,12 @@ function getTokenParser(tokenText) {
     if (!result) {
       // No tokens left. Parse the plain text after the last token
       let str = tokenText.substring(charIndex);
-      tokenFuncs.push(props => str);
+      tokenFuncs.push(() => str);
       break;
     } else if (result.index > charIndex) {
       // There is some plain text before the token
       let str = tokenText.substring(charIndex, result.index);
-      tokenFuncs.push(props => str);
+      tokenFuncs.push(() => str);
     }
 
     // Add a function to process the current token
@@ -2129,7 +2133,7 @@ function getTokenParser(tokenText) {
     tokenFuncs.push(props => props[token]);
     charIndex = tokenPattern.lastIndex;
   }
-  
+
   // We now have an array of functions returning either a text string or
   // a feature property
   // Return a function that assembles everything
@@ -2207,22 +2211,22 @@ function initCircleParsing(style) {
     [paint["circle-radius"],  "radius"],
     [paint["circle-color"],   "color"],
     [paint["circle-opacity"], "opacity"],
-  ].filter(([get, key]) => get.type === "property");
+  ].filter(([get]) => get.type === "property");
 
   return function(feature, { z, x, y }) {
     const circlePos = flattenPoints(feature.geometry);
     if (!circlePos) return;
 
     const length = circlePos.length / 2;
-    
-    const buffers = { 
+
+    const buffers = {
       circlePos,
-      tileCoords: Array.from({ length }).flatMap(v => [x, y, z]),
+      tileCoords: Array.from({ length }).flatMap(() => [x, y, z]),
     };
 
     dataFuncs.forEach(([get, key]) => {
       let val = get(null, feature);
-      buffers[key] = Array.from({ length }).flatMap(v => val);
+      buffers[key] = Array.from({ length }).flatMap(() => val);
     });
 
     return buffers;
@@ -2249,7 +2253,7 @@ function initLineParsing(style) {
   const dataFuncs = [
     [paint["line-color"], "color"],
     [paint["line-opacity"], "opacity"],
-  ].filter(([get, key]) => get.type === "property");
+  ].filter(([get]) => get.type === "property");
 
   return function(feature, { z, x, y }) {
     const lines = flattenLines(feature.geometry);
@@ -2259,12 +2263,12 @@ function initLineParsing(style) {
 
     const buffers = {
       lines,
-      tileCoords: Array.from({ length }).flatMap(v => [x, y, z]),
+      tileCoords: Array.from({ length }).flatMap(() => [x, y, z]),
     };
 
     dataFuncs.forEach(([get, key]) => {
       let val = get(null, feature);
-      buffers[key] = Array.from({ length }).flatMap(v => val);
+      buffers[key] = Array.from({ length }).flatMap(() => val);
     });
 
     return buffers;
@@ -2996,9 +3000,9 @@ function initFillParsing(style) {
   const { paint } = style;
 
   const dataFuncs = [
-    [paint["fill-color"],   "color"],
+    [paint["fill-color"], "color"],
     [paint["fill-opacity"], "opacity"],
-  ].filter(([get, key]) => get.type === "property");
+  ].filter(([get]) => get.type === "property");
 
   return function(feature, { z, x, y }) {
     const triangles = triangulate(feature.geometry);
@@ -3009,12 +3013,12 @@ function initFillParsing(style) {
     const buffers = {
       position: triangles.vertices,
       indices: triangles.indices,
-      tileCoords: Array.from({ length }).flatMap(v => [x, y, z]),
+      tileCoords: Array.from({ length }).flatMap(() => [x, y, z]),
     };
 
     dataFuncs.forEach(([get, key]) => {
       let val = get(null, feature);
-      buffers[key] = Array.from({ length }).flatMap(v => val);
+      buffers[key] = Array.from({ length }).flatMap(() => val);
     });
 
     return buffers;
@@ -3089,19 +3093,19 @@ function getTextBoxShift(anchor) {
   // by the returned value * bounding box dimensions
   switch (anchor) {
     case "top-left":
-      return [ 0.0,  0.0];
+      return [0.0, 0.0];
     case "top-right":
-      return [-1.0,  0.0];
+      return [-1.0, 0.0];
     case "top":
-      return [-0.5,  0.0];
+      return [-0.5, 0.0];
     case "bottom-left":
-      return [ 0.0, -1.0];
+      return [0.0, -1.0];
     case "bottom-right":
       return [-1.0, -1.0];
     case "bottom":
       return [-0.5, -1.0];
     case "left":
-      return [ 0.0, -0.5];
+      return [0.0, -0.5];
     case "right":
       return [-1.0, -0.5];
     case "center":
@@ -3127,7 +3131,7 @@ function getLineShift(justify, boxShiftX) {
 }
 
 const whitespace = {
-  // From mapbox-gl-js/src/symbol/shaping.js
+  // From maplibre-gl-js/src/symbol/shaping.js
   [0x09]: true, // tab
   [0x0a]: true, // newline
   [0x0b]: true, // vertical tab
@@ -3137,17 +3141,17 @@ const whitespace = {
 };
 
 const breakable = {
-  // From mapbox-gl-js/src/symbol/shaping.js
-  [0x0a]:   true, // newline
-  [0x20]:   true, // space
-  [0x26]:   true, // ampersand
-  [0x28]:   true, // left parenthesis
-  [0x29]:   true, // right parenthesis
-  [0x2b]:   true, // plus sign
-  [0x2d]:   true, // hyphen-minus
-  [0x2f]:   true, // solidus
-  [0xad]:   true, // soft hyphen
-  [0xb7]:   true, // middle dot
+  // From maplibre-gl-js/src/symbol/shaping.js
+  [0x0a]: true, // newline
+  [0x20]: true, // space
+  [0x26]: true, // ampersand
+  [0x28]: true, // left parenthesis
+  [0x29]: true, // right parenthesis
+  [0x2b]: true, // plus sign
+  [0x2d]: true, // hyphen-minus
+  [0x2f]: true, // solidus
+  [0xad]: true, // soft hyphen
+  [0xb7]: true, // middle dot
   [0x200b]: true, // zero-width space
   [0x2010]: true, // hyphen
   [0x2013]: true, // en dash
@@ -3164,9 +3168,8 @@ function getBreakPoints(glyphs, spacing, targetWidth) {
     if (!whitespace[code]) cursor += advance + spacing;
 
     if (i == last) return;
-    if (!breakable[code] 
-      //&& !charAllowsIdeographicBreaking(code)
-    ) return;
+    // if (!breakable[code]&& !charAllowsIdeographicBreaking(code)) return;
+    if (!breakable[code]) return;
 
     let breakInfo = evaluateBreak(
       i + 1,
@@ -3247,7 +3250,7 @@ function splitLines(glyphs, spacing, maxWidth) {
 
   const lineCount = Math.ceil(totalWidth / maxWidth);
   if (lineCount < 1) return [];
-  
+
   const targetWidth = totalWidth / lineCount;
   const breakPoints = getBreakPoints(glyphs, spacing, targetWidth);
 
@@ -3328,7 +3331,7 @@ function initShaper(layout) {
     // 6. Fill in label origins for each glyph. TODO: assumes Point geometry
     const origin = feature.geometry.coordinates.slice();
     const labelPos = lines.flat()
-      .flatMap(g => origin);
+      .flatMap(() => origin);
 
     // 7. Collect all the glyph rects
     const sdfRect = lines.flat()
@@ -3344,7 +3347,7 @@ function initShaper(layout) {
     ];
 
     return { labelPos, charPos, sdfRect, bbox };
-  }
+  };
 }
 
 function initShaping(style) {
@@ -3355,7 +3358,7 @@ function initShaping(style) {
   const dataFuncs = [
     [paint["text-color"],   "color"],
     [paint["text-opacity"], "opacity"],
-  ].filter(([get, key]) => get.type === "property");
+  ].filter(([get]) => get.type === "property");
 
   return function(feature, tileCoords, atlas, tree) {
     // tree is an RBush from the 'rbush' module. NOTE: will be updated!
@@ -3376,11 +3379,11 @@ function initShaping(style) {
     tree.insert(box);
 
     const length = buffers.labelPos.length / 2;
-    buffers.tileCoords = Array.from({ length }).flatMap(v => [x, y, z]);
+    buffers.tileCoords = Array.from({ length }).flatMap(() => [x, y, z]);
 
     dataFuncs.forEach(([get, key]) => {
       let val = get(null, feature);
-      buffers[key] = Array.from({ length }).flatMap(v => val);
+      buffers[key] = Array.from({ length }).flatMap(() => val);
     });
 
     // TODO: drop if outside tile?
@@ -3423,13 +3426,13 @@ function concatBuffers(features) {
 function appendBuffers(buffers, newBuffers) {
   const appendix = Object.assign({}, newBuffers);
   if (buffers.indices) {
-    let indexShift = buffers.position.length / 2;
+    const indexShift = buffers.position.length / 2;
     appendix.indices = newBuffers.indices.map(i => i + indexShift);
   }
   Object.keys(buffers).forEach(k => {
     // NOTE: The 'obvious' buffers[k].push(...appendix[k]) fails with
     //  the error "Maximum call stack size exceeded"
-    let base = buffers[k];
+    const base = buffers[k];
     appendix[k].forEach(a => base.push(a));
   });
 }
@@ -4009,7 +4012,7 @@ function initBufferConstructors(styles) {
     return Object.entries(layers)
       .reverse() // Reverse order for collision checks
       .map(([id, layer]) => {
-        let serialize = layerSerializers[id];
+        const serialize = layerSerializers[id];
         if (serialize) return serialize(layer, tileCoords, atlas, tree);
       })
       .reverse()
@@ -4025,11 +4028,11 @@ function initLayerSerializer(style) {
   if (!transform) return;
 
   return function(layer, tileCoords, atlas, tree) {
-    let { type, extent, features } = layer;
+    const { type, extent, features } = layer;
 
-    let transformed = features.map(feature => {
-      let { properties, geometry } = feature;
-      let buffers = transform(feature, tileCoords, atlas, tree);
+    const transformed = features.map(feature => {
+      const { properties, geometry } = feature;
+      const buffers = transform(feature, tileCoords, atlas, tree);
       // NOTE: if no buffers, we don't even want to keep the original
       // feature--because it won't be visible to the user (not rendered)
       if (buffers) return { properties, geometry, buffers };
@@ -4350,7 +4353,7 @@ function readTile(tag, layers, pbf) {
 function initMVT(source) {
   const getURL = initUrlFunc(source.tiles);
 
-  // TODO: use VectorTile.extent. Requires changes in vector-tile-esm, tile-painter
+  // TODO: use VectorTile.extent. Requires changes in dependencies, dependents
   const size = 512;
 
   return function(tileCoords, callback) {
@@ -4370,34 +4373,36 @@ function initMVT(source) {
 }
 
 function xhrGet(href, type, callback) {
-  var req = new XMLHttpRequest();
-  req.responseType = type;
+  const req = new XMLHttpRequest();
 
+  req.responseType = type;
   req.onerror = errHandler;
   req.onabort = errHandler;
   req.onload = loadHandler;
 
-  req.open('get', href);
+  req.open("get", href);
   req.send();
 
   function errHandler(e) {
-    let err = "XMLHttpRequest ended with an " + e.type;
-    return callback(err);
+    return callback(xhrErr("ended with an ", e.type));
   }
-  function loadHandler(e) {
-    if (req.responseType !== type) {
-      let err = "XMLHttpRequest: Wrong responseType. Expected " +
-        type + ", got " + req.responseType;
-      return callback(err, req.response);
-    }
-    if (req.status !== 200) {
-      let err = "XMLHttpRequest: HTTP " + req.status + " error from " + href;
-      return callback(err, req.response);
-    }
-    return callback(null, req.response);
+
+  function loadHandler() {
+    const { responseType, status, response } = req;
+
+    const err = (responseType !== type) ?
+      xhrErr("Expected responseType ", type, ", got ", responseType) :
+      (status !== 200) ? xhrErr("HTTP ", status, " error from ", href) :
+      null;
+
+    return callback(err, response);
   }
 
   return req; // Request can be aborted via req.abort()
+}
+
+function xhrErr(...strings) {
+  return "XMLHttpRequest: " + strings.join("");
 }
 
 function initUrlFunc(endpoints) {
@@ -4406,7 +4411,7 @@ function initUrlFunc(endpoints) {
 
   return function(z, x, y) {
     index = (index + 1) % endpoints.length;
-    var endpoint = endpoints[index];
+    const endpoint = endpoints[index];
     return endpoint.replace(/{z}/, z).replace(/{x}/, x).replace(/{y}/, y);
   };
 }
@@ -5327,16 +5332,16 @@ function geojsonvtToJSON(value) {
   const { geometry, type: typeNum, tags: properties } = value;
   if (!geometry) return value;
 
-  const types = ['Unknown', 'Point', 'LineString', 'Polygon'];
+  const types = ["Unknown", "Point", "LineString", "Polygon"];
 
   const type = (geometry.length <= 1)
     ? types[typeNum]
-    : 'Multi' + types[typeNum];
+    : "Multi" + types[typeNum];
 
   const coordinates =
-    (type == "MultiPolygon") ? [geometry]
-    : (type === 'Point'|| type === 'LineString') ? geometry[0]
-    : geometry;
+    (type == "MultiPolygon") ? [geometry] :
+    (type === "Point" || type === "LineString") ? geometry[0] :
+    geometry;
 
   return { geometry: { type, coordinates }, properties };
 }
@@ -5349,31 +5354,38 @@ onmessage = function(msgEvent) {
 
   switch (type) {
     case "setup":
-      // NOTE: changing global variable!
-      let { styles, glyphEndpoint, source } = payload;
-      loader = (source.type === "geojson")
-        ? initGeojson(source, styles)
-        : initMVT(source);
-      processor = initSourceProcessor(payload);
-      break;
+      return setup(payload);
     case "getTile":
-      // let { z, x, y } = payload;
-      let callback = (err, result) => process(id, err, result, payload);
-      const request = loader(payload, callback);
-      tasks[id] = { request, status: "requested" };
-      break;
+      return getTile(payload, id);
     case "cancel":
-      let task = tasks[id];
-      if (task && task.status === "requested") task.request.abort();
-      delete tasks[id];
-      break;
-      // Bad message type!
+      return cancel(id);
   }
 };
 
+function setup(payload) {
+  const { styles, source } = payload;
+  // NOTE: changing global variables!
+  loader = (source.type === "geojson")
+    ? initGeojson(source, styles)
+    : initMVT(source);
+  processor = initSourceProcessor(payload);
+}
+
+function getTile(payload, id) {
+  const callback = (err, result) => process(id, err, result, payload);
+  const request = loader(payload, callback);
+  tasks[id] = { request, status: "requested" };
+}
+
+function cancel(id) {
+  const task = tasks[id];
+  if (task && task.status === "requested") task.request.abort();
+  delete tasks[id];
+}
+
 function process(id, err, result, tileCoords) {
   // Make sure we still have an active task for this ID
-  let task = tasks[id];
+  const task = tasks[id];
   if (!task) return;  // Task must have been canceled
 
   if (err) {
@@ -5387,7 +5399,7 @@ function process(id, err, result, tileCoords) {
 
 function sendTile(id, tile) {
   // Make sure we still have an active task for this ID
-  let task = tasks[id];
+  const task = tasks[id];
   if (!task) return; // Task must have been canceled
 
   // Get a list of all the Transferable objects

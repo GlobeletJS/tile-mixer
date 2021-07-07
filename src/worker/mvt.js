@@ -1,10 +1,10 @@
-import Protobuf from 'pbf';
-import { VectorTile } from 'vector-tile-esm';
+import Protobuf from "pbf";
+import { VectorTile } from "vector-tile-esm";
 
 export function initMVT(source) {
   const getURL = initUrlFunc(source.tiles);
 
-  // TODO: use VectorTile.extent. Requires changes in vector-tile-esm, tile-painter
+  // TODO: use VectorTile.extent. Requires changes in dependencies, dependents
   const size = 512;
 
   return function(tileCoords, callback) {
@@ -24,34 +24,36 @@ export function initMVT(source) {
 }
 
 function xhrGet(href, type, callback) {
-  var req = new XMLHttpRequest();
-  req.responseType = type;
+  const req = new XMLHttpRequest();
 
+  req.responseType = type;
   req.onerror = errHandler;
   req.onabort = errHandler;
   req.onload = loadHandler;
 
-  req.open('get', href);
+  req.open("get", href);
   req.send();
 
   function errHandler(e) {
-    let err = "XMLHttpRequest ended with an " + e.type;
-    return callback(err);
+    return callback(xhrErr("ended with an ", e.type));
   }
-  function loadHandler(e) {
-    if (req.responseType !== type) {
-      let err = "XMLHttpRequest: Wrong responseType. Expected " +
-        type + ", got " + req.responseType;
-      return callback(err, req.response);
-    }
-    if (req.status !== 200) {
-      let err = "XMLHttpRequest: HTTP " + req.status + " error from " + href;
-      return callback(err, req.response);
-    }
-    return callback(null, req.response);
+
+  function loadHandler() {
+    const { responseType, status, response } = req;
+
+    const err = (responseType !== type) ?
+      xhrErr("Expected responseType ", type, ", got ", responseType) :
+      (status !== 200) ? xhrErr("HTTP ", status, " error from ", href) :
+      null;
+
+    return callback(err, response);
   }
 
   return req; // Request can be aborted via req.abort()
+}
+
+function xhrErr(...strings) {
+  return "XMLHttpRequest: " + strings.join("");
 }
 
 function initUrlFunc(endpoints) {
@@ -60,7 +62,7 @@ function initUrlFunc(endpoints) {
 
   return function(z, x, y) {
     index = (index + 1) % endpoints.length;
-    var endpoint = endpoints[index];
+    const endpoint = endpoints[index];
     return endpoint.replace(/{z}/, z).replace(/{x}/, x).replace(/{y}/, y);
   };
 }

@@ -10,32 +10,39 @@ onmessage = function(msgEvent) {
 
   switch (type) {
     case "setup":
-      // NOTE: changing global variable!
-      let { styles, glyphEndpoint, source } = payload;
-      loader = (source.type === "geojson")
-        ? initGeojson(source, styles)
-        : initMVT(source);
-      processor = initSourceProcessor(payload);
-      break;
+      return setup(payload);
     case "getTile":
-      // let { z, x, y } = payload;
-      let callback = (err, result) => process(id, err, result, payload);
-      const request = loader(payload, callback);
-      tasks[id] = { request, status: "requested" };
-      break;
+      return getTile(payload, id);
     case "cancel":
-      let task = tasks[id];
-      if (task && task.status === "requested") task.request.abort();
-      delete tasks[id];
-      break;
-    default:
-      // Bad message type!
+      return cancel(id);
+    default: // Bad message type!
   }
+};
+
+function setup(payload) {
+  const { styles, source } = payload;
+  // NOTE: changing global variables!
+  loader = (source.type === "geojson")
+    ? initGeojson(source, styles)
+    : initMVT(source);
+  processor = initSourceProcessor(payload);
+}
+
+function getTile(payload, id) {
+  const callback = (err, result) => process(id, err, result, payload);
+  const request = loader(payload, callback);
+  tasks[id] = { request, status: "requested" };
+}
+
+function cancel(id) {
+  const task = tasks[id];
+  if (task && task.status === "requested") task.request.abort();
+  delete tasks[id];
 }
 
 function process(id, err, result, tileCoords) {
   // Make sure we still have an active task for this ID
-  let task = tasks[id];
+  const task = tasks[id];
   if (!task) return;  // Task must have been canceled
 
   if (err) {
@@ -49,7 +56,7 @@ function process(id, err, result, tileCoords) {
 
 function sendTile(id, tile) {
   // Make sure we still have an active task for this ID
-  let task = tasks[id];
+  const task = tasks[id];
   if (!task) return; // Task must have been canceled
 
   // Get a list of all the Transferable objects

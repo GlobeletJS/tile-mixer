@@ -20,10 +20,10 @@ export function initWorkers(codeHref, params) {
     cancelTask,
     activeTasks: () => workLoads.reduce( (a, b) => a + b, 0 ),
     terminate: () => workers.forEach( worker => worker.terminate() ),
-  }
+  };
 
   function startTask(payload, callback) {
-    let workerID = getIdleWorkerID(workLoads);
+    const workerID = getIdleWorkerID(workLoads);
     workLoads[workerID] += 1;
 
     msgId += 1;
@@ -34,7 +34,7 @@ export function initWorkers(codeHref, params) {
   }
 
   function cancelTask(id) {
-    let task = tasks[id];
+    const task = tasks[id];
     if (!task) return;
     workers[task.workerID].postMessage({ id, type: "cancel" });
     workLoads[task.workerID] -= 1;

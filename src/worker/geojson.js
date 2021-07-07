@@ -1,4 +1,4 @@
-import geojsonvt from 'geojson-vt';
+import geojsonvt from "geojson-vt";
 
 export function initGeojson(source, styles) {
   const extent = 512; // TODO: reset to 4096? Then tolerance can be default 3
@@ -31,16 +31,16 @@ function geojsonvtToJSON(value) {
   const { geometry, type: typeNum, tags: properties } = value;
   if (!geometry) return value;
 
-  const types = ['Unknown', 'Point', 'LineString', 'Polygon'];
+  const types = ["Unknown", "Point", "LineString", "Polygon"];
 
   const type = (geometry.length <= 1)
     ? types[typeNum]
-    : 'Multi' + types[typeNum];
+    : "Multi" + types[typeNum];
 
   const coordinates =
-    (type == "MultiPolygon") ? [geometry]
-    : (type === 'Point'|| type === 'LineString') ? geometry[0]
-    : geometry;
+    (type == "MultiPolygon") ? [geometry] :
+    (type === "Point" || type === "LineString") ? geometry[0] :
+    geometry;
 
   return { geometry: { type, coordinates }, properties };
 }

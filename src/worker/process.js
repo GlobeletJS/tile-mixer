@@ -1,6 +1,6 @@
-import { getStyleFuncs } from 'tile-stencil';
+import { getStyleFuncs } from "tile-stencil";
 import { initSourceFilter } from "./filter.js";
-import { initAtlasGetter } from 'tile-labeler';
+import { initAtlasGetter } from "tile-labeler";
 import { initBufferConstructors } from "./buffers.js";
 
 export function initSourceProcessor({ styles, glyphEndpoint }) {
