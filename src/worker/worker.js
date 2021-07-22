@@ -3,7 +3,7 @@ import { initMVT } from "./mvt.js";
 import { initGeojson } from "./geojson.js";
 
 const tasks = {};
-var loader, processor;
+let loader, processor;
 
 onmessage = function(msgEvent) {
   const { id, type, payload } = msgEvent.data;

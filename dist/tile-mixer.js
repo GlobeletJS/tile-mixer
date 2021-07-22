@@ -3,23 +3,23 @@ initZeroTimeouts();
 function initZeroTimeouts() {
   // setTimeout with true zero delay. https://github.com/GlobeletJS/zero-timeout
   const timeouts = [];
-  var taskId = 0;
+  let taskId = 0;
 
   // Make a unique message, that won't be confused with messages from
   // other scripts or browser tabs
   const messageKey = "zeroTimeout_$" + Math.random().toString(36).slice(2);
 
   // Make it clear where the messages should be coming from
-  const loc = window.location;
-  var targetOrigin = loc.protocol + "//" + loc.hostname;
-  if (loc.port !== "") targetOrigin += ":" + loc.port;
+  const { protocol, hostname, port } = window.location;
+  let targetOrigin = protocol + "//" + hostname;
+  if (port !== "") targetOrigin += ":" + port;
 
   // When a message is received, execute a timeout from the list
   window.addEventListener("message", evnt => {
     if (evnt.source != window || evnt.data !== messageKey) return;
     evnt.stopPropagation();
 
-    let task = timeouts.shift();
+    const task = timeouts.shift();
     if (!task || task.canceled) return;
     task.func(...task.args);
   }, true);
@@ -33,15 +33,15 @@ function initZeroTimeouts() {
   };
 
   window.clearZeroTimeout = function(id) {
-    let task = timeouts.find(timeout => timeout.id === id);
+    const task = timeouts.find(timeout => timeout.id === id);
     if (task) task.canceled = true;
   };
 }
 
 function init() {
   const tasks = [];
-  var taskId = 0;
-  var queueIsRunning = false;
+  let taskId = 0;
+  let queueIsRunning = false;
 
   return {
     enqueueTask,
@@ -63,7 +63,7 @@ function init() {
   }
 
   function cancelTask(id) {
-    let task = tasks.find(task => task.id === id);
+    const task = tasks.find(task => task.id === id);
     if (task) task.canceled = true;
   }
 
@@ -84,7 +84,7 @@ function init() {
     if (!queueIsRunning) return;
 
     // Get the next chunk from the current task, and run it
-    let chunk = tasks[0].chunks.shift();
+    const chunk = tasks[0].chunks.shift();
     chunk();
 
     window.setZeroTimeout(runTaskQueue);
@@ -142,7 +142,7 @@ function initWorkers(codeHref, params) {
   const { threads, glyphs, layers, source } = params;
 
   const tasks = {};
-  var msgId = 0;
+  let msgId = 0;
 
   // Initialize the worker threads, and send them the styles
   function trainWorker() {
@@ -609,13 +609,13 @@ function buildInterpolator(stops, base = 1) {
   const interpolate = getInterpolator(type);
 
   return function(x) {
-    let iz = stops.findIndex(stop => stop[0] > x);
+    const iz = stops.findIndex(stop => stop[0] > x);
 
     if (iz === 0) return stops[0][1]; // x is below first stop
     if (iz < 0) return stops[izm][1]; // x is above last stop
 
-    let [x0, y0] = stops[iz - 1];
-    let [x1, y1] = stops[iz];
+    const [x0, y0] = stops[iz - 1];
+    const [x1, y1] = stops[iz];
 
     return interpolate(y0, scale(x0, x, x1), y1);
   };
@@ -628,7 +628,7 @@ function getType(v) {
 function convertIfColor(val) {
   // Convert CSS color strings to clamped RGBA arrays for WebGL
   if (!color(val)) return val;
-  let c = rgb(val);
+  const c = rgb(val);
   return [c.r / 255, c.g / 255, c.b / 255, c.opacity];
 }
 
@@ -897,15 +897,15 @@ function buildFeatureFilter(filterObj) {
   // If this is a combined filter, the vals are themselves filter definitions
   switch (type) {
     case "all": {
-      let filters = vals.map(buildFeatureFilter);  // Iteratively recursive!
+      const filters = vals.map(buildFeatureFilter);  // Iteratively recursive!
       return (d) => filters.every( filt => filt(d) );
     }
     case "any": {
-      let filters = vals.map(buildFeatureFilter);
+      const filters = vals.map(buildFeatureFilter);
       return (d) => filters.some( filt => filt(d) );
     }
     case "none": {
-      let filters = vals.map(buildFeatureFilter);
+      const filters = vals.map(buildFeatureFilter);
       return (d) => filters.every( filt => !filt(d) );
     }
     default:
@@ -955,7 +955,7 @@ function initFeatureValGetter(key) {
     case "$type":
       // NOTE: data includes MultiLineString, MultiPolygon, etc-NOT IN SPEC
       return f => {
-        let t = f.geometry.type;
+        const t = f.geometry.type;
         if (t === "MultiPoint") return "Point";
         if (t === "MultiLineString") return "LineString";
         if (t === "MultiPolygon") return "Polygon";
@@ -1835,7 +1835,7 @@ function copyImage(srcImg, dstImg, srcPt, dstPt, size, channels) {
 }
 
 function outOfRange(point, size, image) {
-  let { width, height } = size;
+  const { width, height } = size;
   return (
     width > image.width ||
     height > image.height ||
@@ -2034,7 +2034,7 @@ function buildAtlas(fonts) {
   // Using the updated rects, copy all the bitmaps into one image
   const image = new AlphaImage({ width: w || 1, height: h || 1 });
   Object.entries(fonts).forEach(([font, glyphs]) => {
-    let fontPos = positions[font];
+    const fontPos = positions[font];
     glyphs.forEach(glyph => copyGlyphBitmap(glyph, fontPos, image));
   });
 
@@ -2043,32 +2043,32 @@ function buildAtlas(fonts) {
 
 function getPositions(glyphs) {
   return glyphs.reduce((dict, glyph) => {
-    let pos = getPosition(glyph);
+    const pos = getPosition(glyph);
     if (pos) dict[glyph.id] = pos;
     return dict;
   }, {});
 }
 
 function getPosition(glyph) {
-  let { bitmap: { width, height }, metrics } = glyph;
+  const { bitmap: { width, height }, metrics } = glyph;
   if (width === 0 || height === 0) return;
 
   // Construct a preliminary rect, positioned at the origin for now
-  let w = width + 2 * ATLAS_PADDING$1;
-  let h = height + 2 * ATLAS_PADDING$1;
-  let rect = { x: 0, y: 0, w, h };
+  const w = width + 2 * ATLAS_PADDING$1;
+  const h = height + 2 * ATLAS_PADDING$1;
+  const rect = { x: 0, y: 0, w, h };
 
   return { metrics, rect };
 }
 
 function copyGlyphBitmap(glyph, positions, image) {
-  let { id, bitmap } = glyph;
-  let position = positions[id];
+  const { id, bitmap } = glyph;
+  const position = positions[id];
   if (!position) return;
 
-  let srcPt = { x: 0, y: 0 };
-  let { x, y } = position.rect;
-  let dstPt = { x: x + ATLAS_PADDING$1, y: y + ATLAS_PADDING$1 };
+  const srcPt = { x: 0, y: 0 };
+  const { x, y } = position.rect;
+  const dstPt = { x: x + ATLAS_PADDING$1, y: y + ATLAS_PADDING$1 };
   AlphaImage.copy(bitmap, image, srcPt, dstPt, bitmap);
 }
 
@@ -2092,7 +2092,7 @@ function initGetter(urlTemplate, key) {
     const fontGlyphs = {};
 
     const promises = Object.entries(fontCodes).map(([font, codes]) => {
-      let requests = Array.from(codes, code => getGlyph(font, code));
+      const requests = Array.from(codes, code => getGlyph(font, code));
 
       return Promise.all(requests).then(glyphs => {
         fontGlyphs[font] = glyphs.filter(g => g !== undefined);
@@ -2111,25 +2111,25 @@ function getTokenParser(tokenText) {
 
   // We break tokenText into pieces that are either plain text or tokens,
   // then construct an array of functions to parse each piece
-  var tokenFuncs = [];
-  var charIndex  = 0;
+  const tokenFuncs = [];
+  let charIndex  = 0;
   while (charIndex < tokenText.length) {
     // Find the next token
-    let result = tokenPattern.exec(tokenText);
+    const result = tokenPattern.exec(tokenText);
 
     if (!result) {
       // No tokens left. Parse the plain text after the last token
-      let str = tokenText.substring(charIndex);
+      const str = tokenText.substring(charIndex);
       tokenFuncs.push(() => str);
       break;
     } else if (result.index > charIndex) {
       // There is some plain text before the token
-      let str = tokenText.substring(charIndex, result.index);
+      const str = tokenText.substring(charIndex, result.index);
       tokenFuncs.push(() => str);
     }
 
     // Add a function to process the current token
-    let token = result[1];
+    const token = result[1];
     tokenFuncs.push(props => props[token]);
     charIndex = tokenPattern.lastIndex;
   }
@@ -2140,7 +2140,7 @@ function getTokenParser(tokenText) {
   return function(properties) {
     return tokenFuncs.reduce(concat, "");
     function concat(str, tokenFunc) {
-      let text = tokenFunc(properties) || "";
+      const text = tokenFunc(properties) || "";
       return str += text;
     }
   };
@@ -2225,7 +2225,7 @@ function initCircleParsing(style) {
     };
 
     dataFuncs.forEach(([get, key]) => {
-      let val = get(null, feature);
+      const val = get(null, feature);
       buffers[key] = Array.from({ length }).flatMap(() => val);
     });
 
@@ -2267,7 +2267,7 @@ function initLineParsing(style) {
     };
 
     dataFuncs.forEach(([get, key]) => {
-      let val = get(null, feature);
+      const val = get(null, feature);
       buffers[key] = Array.from({ length }).flatMap(() => val);
     });
 
@@ -2276,7 +2276,7 @@ function initLineParsing(style) {
 }
 
 function flattenLines(geometry) {
-  let { type, coordinates } = geometry;
+  const { type, coordinates } = geometry;
 
   switch (type) {
     case "LineString":
@@ -2593,7 +2593,7 @@ function eliminateHoles(data, holeIndices, outerNode, dim) {
 
     // process holes from left to right
     for (i = 0; i < queue.length; i++) {
-        eliminateHole(queue[i], outerNode);
+        outerNode = eliminateHole(queue[i], outerNode);
         outerNode = filterPoints(outerNode, outerNode.next);
     }
 
@@ -2606,14 +2606,19 @@ function compareX(a, b) {
 
 // find a bridge between vertices that connects hole with an outer ring and and link it
 function eliminateHole(hole, outerNode) {
-    outerNode = findHoleBridge(hole, outerNode);
-    if (outerNode) {
-        var b = splitPolygon(outerNode, hole);
-
-        // filter collinear points around the cuts
-        filterPoints(outerNode, outerNode.next);
-        filterPoints(b, b.next);
+    var bridge = findHoleBridge(hole, outerNode);
+    if (!bridge) {
+        return outerNode;
     }
+
+    var bridgeReverse = splitPolygon(bridge, hole);
+
+    // filter collinear points around the cuts
+    var filteredBridge = filterPoints(bridge, bridge.next);
+    filterPoints(bridgeReverse, bridgeReverse.next);
+
+    // Check if input node was removed by the filtering
+    return outerNode === bridge ? filteredBridge : outerNode;
 }
 
 // David Eberly's algorithm for finding a bridge between hole and outer polygon
@@ -3017,7 +3022,7 @@ function initFillParsing(style) {
     };
 
     dataFuncs.forEach(([get, key]) => {
-      let val = get(null, feature);
+      const val = get(null, feature);
       buffers[key] = Array.from({ length }).flatMap(() => val);
     });
 
@@ -3033,7 +3038,7 @@ function triangulate(geometry) {
       return indexPolygon(coordinates);
     case "MultiPolygon":
       return coordinates.map(indexPolygon).reduce((acc, cur) => {
-        let indexShift = acc.vertices.length / 2;
+        const indexShift = acc.vertices.length / 2;
         acc.vertices.push(...cur.vertices);
         acc.indices.push(...cur.indices.map(h => h + indexShift));
         return acc;
@@ -3044,8 +3049,8 @@ function triangulate(geometry) {
 }
 
 function indexPolygon(coords) {
-  let { vertices, holes, dimensions } = earcut$1.flatten(coords);
-  let indices = earcut$1(vertices, holes, dimensions);
+  const { vertices, holes, dimensions } = earcut$1.flatten(coords);
+  const indices = earcut$1(vertices, holes, dimensions);
   return { vertices, indices };
 }
 
@@ -3057,14 +3062,14 @@ const ATLAS_PADDING = 1;
 const RECT_BUFFER = GLYPH_PBF_BORDER + ATLAS_PADDING;
 
 function layoutLine(glyphs, origin, spacing, scalar) {
-  var xCursor = origin[0];
+  let xCursor = origin[0];
   const y0 = origin[1];
 
   return glyphs.flatMap(g => {
-    let { left, top, advance } = g.metrics;
+    const { left, top, advance } = g.metrics;
 
-    let dx = xCursor + left - RECT_BUFFER;
-    let dy = y0 - top - RECT_BUFFER;
+    const dx = xCursor + left - RECT_BUFFER;
+    const dy = y0 - top - RECT_BUFFER;
 
     xCursor += advance + spacing;
 
@@ -3079,9 +3084,9 @@ function getGlyphInfo(feature, atlas) {
   if (!positions || !charCodes || !charCodes.length) return;
 
   const info = feature.charCodes.map(code => {
-    let pos = positions[code];
+    const pos = positions[code];
     if (!pos) return;
-    let { metrics, rect } = pos;
+    const { metrics, rect } = pos;
     return { code, metrics, rect };
   });
 
@@ -3164,14 +3169,14 @@ function getBreakPoints(glyphs, spacing, targetWidth) {
   let cursor = 0;
 
   glyphs.forEach((g, i) => {
-    let { code, metrics: { advance } } = g;
+    const { code, metrics: { advance } } = g;
     if (!whitespace[code]) cursor += advance + spacing;
 
     if (i == last) return;
     // if (!breakable[code]&& !charAllowsIdeographicBreaking(code)) return;
     if (!breakable[code]) return;
 
-    let breakInfo = evaluateBreak(
+    const breakInfo = evaluateBreak(
       i + 1,
       cursor,
       targetWidth,
@@ -3269,7 +3274,7 @@ function breakLines(glyphs, breakPoints) {
   let start = 0;
 
   return breakPoints.map(lineBreak => {
-    let line = glyphs.slice(start, lineBreak);
+    const line = glyphs.slice(start, lineBreak);
 
     // Trim whitespace from both ends
     while (line.length && whitespace[line[0].code]) line.shift();
@@ -3281,7 +3286,7 @@ function breakLines(glyphs, breakPoints) {
 }
 
 function trailingWhiteSpace(line) {
-  let len = line.length;
+  const len = line.length;
   if (!len) return false;
   return whitespace[line[len - 1].code];
 }
@@ -3317,8 +3322,8 @@ function initShaper(layout) {
     const justify = layout["text-justify"](zoom, feature);
     const lineShiftX = getLineShift(justify, boxShift[0]);
     const lineOrigins = lineWidths.map((lineWidth, i) => {
-      let x = (boxSize[0] - lineWidth) * lineShiftX + boxOrigin[0];
-      let y = i * lineHeight + boxOrigin[1];
+      const x = (boxSize[0] - lineWidth) * lineShiftX + boxOrigin[0];
+      const y = i * lineHeight + boxOrigin[1];
       return [x, y];
     });
 
@@ -3367,8 +3372,8 @@ function initShaping(style) {
     const buffers = shaper(feature, z, atlas);
     if (!buffers) return;
 
-    let { labelPos: [x0, y0], bbox } = buffers;
-    let box = {
+    const { labelPos: [x0, y0], bbox } = buffers;
+    const box = {
       minX: x0 + bbox[0],
       minY: y0 + bbox[1],
       maxX: x0 + bbox[2],
@@ -3382,7 +3387,7 @@ function initShaping(style) {
     buffers.tileCoords = Array.from({ length }).flatMap(() => [x, y, z]);
 
     dataFuncs.forEach(([get, key]) => {
-      let val = get(null, feature);
+      const val = get(null, feature);
       buffers[key] = Array.from({ length }).flatMap(() => val);
     });
 
@@ -4407,7 +4412,7 @@ function xhrErr(...strings) {
 
 function initUrlFunc(endpoints) {
   // Use a different endpoint for each request
-  var index = 0;
+  let index = 0;
 
   return function(z, x, y) {
     index = (index + 1) % endpoints.length;
@@ -5347,7 +5352,7 @@ function geojsonvtToJSON(value) {
 }
 
 const tasks = {};
-var loader, processor;
+let loader, processor;
 
 onmessage = function(msgEvent) {
   const { id, type, payload } = msgEvent.data;

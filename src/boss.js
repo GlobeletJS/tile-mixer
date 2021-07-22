@@ -2,7 +2,7 @@ export function initWorkers(codeHref, params) {
   const { threads, glyphs, layers, source } = params;
 
   const tasks = {};
-  var msgId = 0;
+  let msgId = 0;
 
   // Initialize the worker threads, and send them the styles
   function trainWorker() {

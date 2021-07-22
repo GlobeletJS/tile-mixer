@@ -58,7 +58,7 @@ function xhrErr(...strings) {
 
 function initUrlFunc(endpoints) {
   // Use a different endpoint for each request
-  var index = 0;
+  let index = 0;
 
   return function(z, x, y) {
     index = (index + 1) % endpoints.length;
