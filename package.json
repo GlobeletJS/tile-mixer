@@ -1,6 +1,6 @@
 {
   "name": "tile-mixer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Load vector tiles, re-mixing the layers based on a MapLibre style document",
   "main": "dist/tile-mixer.js",
   "module": "dist/tile-mixer.js",
