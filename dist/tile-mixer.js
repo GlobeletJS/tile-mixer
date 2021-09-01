@@ -4362,28 +4362,6 @@ function readTile(tag, layers, pbf) {
   }
 }
 
-function initMVT(source) {
-  const getURL = initUrlFunc(source.tiles);
-
-  // TODO: use VectorTile.extent. Requires changes in dependencies, dependents
-  const size = 512;
-
-  return function(tileCoords, callback) {
-    const { z, x, y } = tileCoords;
-    const dataHref = getURL(z, x, y);
-
-    return xhrGet(dataHref, "arraybuffer", parseMVT);
-
-    function parseMVT(err, data) {
-      if (err) return callback(err, data);
-      const tile = new VectorTile(new pbf(data));
-      const json = Object.values(tile.layers)
-        .reduce((d, l) => (d[l.name] = l.toGeoJSON(size), d), {});
-      callback(null, json);
-    }
-  };
-}
-
 function xhrGet(href, type, callback) {
   const req = new XMLHttpRequest();
 
@@ -4415,6 +4393,28 @@ function xhrGet(href, type, callback) {
 
 function xhrErr(...strings) {
   return "XMLHttpRequest: " + strings.join("");
+}
+
+function initMVT(source) {
+  const getURL = initUrlFunc(source.tiles);
+
+  // TODO: use VectorTile.extent. Requires changes in dependencies, dependents
+  const size = 512;
+
+  return function(tileCoords, callback) {
+    const { z, x, y } = tileCoords;
+    const dataHref = getURL(z, x, y);
+
+    return xhrGet(dataHref, "arraybuffer", parseMVT);
+
+    function parseMVT(err, data) {
+      if (err) return callback(err, data);
+      const tile = new VectorTile(new pbf(data));
+      const json = Object.values(tile.layers)
+        .reduce((d, l) => (d[l.name] = l.toGeoJSON(size), d), {});
+      callback(null, json);
+    }
+  };
 }
 
 function initUrlFunc(endpoints) {
@@ -5313,13 +5313,10 @@ function extend(dest, src) {
     return dest;
 }
 
-function initGeojson(source, styles) {
+function initGeojson(source, layerID) {
   const extent = 512; // TODO: reset to 4096? Then tolerance can be default 3
   const indexParams = { extent, tolerance: 1 };
   const tileIndex = geojsonvt(source.data, indexParams);
-
-  // TODO: does geojson-vt always return only one layer?
-  const layerID = styles[0].id;
 
   return function(tileCoords, callback) {
     const { z, x, y } = tileCoords;
@@ -5358,6 +5355,40 @@ function geojsonvtToJSON(value) {
   return { geometry: { type, coordinates }, properties };
 }
 
+function init(userParams) {
+  const { source, defaultID } = setParams(userParams);
+
+  return (source.type === "geojson")
+    ? initGeojson(source, defaultID)
+    : initMVT(source);
+}
+
+function setParams(userParams) {
+  const { source, defaultID = "default" } = userParams;
+
+  if (typeof defaultID !== "string") fail("defaultID must be a string");
+
+  const { type, data, tiles } = source;
+
+  if (type === "geojson") {
+    if (!data || !["Feature", "FeatureCollection"].includes(data.type)) {
+      fail("no valid geojson features");
+    }
+  } else if (type === "vector") {
+    if (!Array.isArray(tiles) || !tiles.every(url => typeof url === "string")) {
+      fail("no valid tile endpoints");
+    }
+  } else {
+    fail("source.type must be geojson or vector");
+  }
+
+  return { source, defaultID };
+}
+
+function fail(message) {
+  throw Error("tile-retriever: " + message);
+}
+
 const tasks = {};
 let loader, processor;
 
@@ -5377,9 +5408,8 @@ onmessage = function(msgEvent) {
 function setup(payload) {
   const { styles, source } = payload;
   // NOTE: changing global variables!
-  loader = (source.type === "geojson")
-    ? initGeojson(source, styles)
-    : initMVT(source);
+  const defaultID = styles[0].id;
+  loader = init({ source, defaultID });
   processor = initSourceProcessor(payload);
 }
 

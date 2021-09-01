@@ -1,6 +1,5 @@
 import { initSourceProcessor } from "./process.js";
-import { initMVT } from "./mvt.js";
-import { initGeojson } from "./geojson.js";
+import * as tileRetriever from "tile-retriever";
 
 const tasks = {};
 let loader, processor;
@@ -22,9 +21,8 @@ onmessage = function(msgEvent) {
 function setup(payload) {
   const { styles, source } = payload;
   // NOTE: changing global variables!
-  loader = (source.type === "geojson")
-    ? initGeojson(source, styles)
-    : initMVT(source);
+  const defaultID = styles[0].id;
+  loader = tileRetriever.init({ source, defaultID });
   processor = initSourceProcessor(payload);
 }
 

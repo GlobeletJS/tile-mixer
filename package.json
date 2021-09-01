@@ -39,12 +39,11 @@
   },
   "dependencies": {
     "chunked-queue": "^0.1.4",
-    "geojson-vt": "^3.2.1",
     "pbf": "^3.2.1",
     "rbush": "^3.0.1",
     "tile-gl": "^0.2.1",
     "tile-labeler": "^0.4.0",
-    "tile-stencil": "^0.4.4",
-    "vector-tile-esm": "^2.1.2"
+    "tile-retriever": "^0.0.2",
+    "tile-stencil": "^0.4.4"
   }
 }

@@ -6,7 +6,7 @@ import pkg from "../package.json";
 export default [{
   input: 'src/worker/worker.js',
   plugins: [
-    resolve(),
+    resolve({ dedupe: ["pbf"] }),
     commonjs(),
   ],
   output: {
@@ -17,7 +17,7 @@ export default [{
 }, {
   input: 'src/main.js',
   plugins: [
-    resolve(),
+    resolve({ dedupe: ["pbf"] }),
     worker(),
   ],
   output: {
