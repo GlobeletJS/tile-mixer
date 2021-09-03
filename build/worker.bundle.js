@@ -813,11 +813,11 @@ function getGeomFilter(type) {
   }
 }
 
-var ieee754$1 = {};
+var ieee754 = {};
 
 /*! ieee754. BSD-3-Clause License. Feross Aboukhadijeh <https://feross.org/opensource> */
 
-ieee754$1.read = function (buffer, offset, isLE, mLen, nBytes) {
+ieee754.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m;
   var eLen = (nBytes * 8) - mLen - 1;
   var eMax = (1 << eLen) - 1;
@@ -850,7 +850,7 @@ ieee754$1.read = function (buffer, offset, isLE, mLen, nBytes) {
   return (s ? -1 : 1) * m * Math.pow(2, e - mLen)
 };
 
-ieee754$1.write = function (buffer, value, offset, isLE, mLen, nBytes) {
+ieee754.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   var e, m, c;
   var eLen = (nBytes * 8) - mLen - 1;
   var eMax = (1 << eLen) - 1;
@@ -902,12 +902,213 @@ ieee754$1.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128;
 };
 
-var pbf = Pbf;
+function readVarintRemainder(l, s, p) {
+    var buf = p.buf,
+        h, b;
 
-var ieee754 = ieee754$1;
+    b = buf[p.pos++]; h  = (b & 0x70) >> 4;  if (b < 0x80) return toNum(l, h, s);
+    b = buf[p.pos++]; h |= (b & 0x7f) << 3;  if (b < 0x80) return toNum(l, h, s);
+    b = buf[p.pos++]; h |= (b & 0x7f) << 10; if (b < 0x80) return toNum(l, h, s);
+    b = buf[p.pos++]; h |= (b & 0x7f) << 17; if (b < 0x80) return toNum(l, h, s);
+    b = buf[p.pos++]; h |= (b & 0x7f) << 24; if (b < 0x80) return toNum(l, h, s);
+    b = buf[p.pos++]; h |= (b & 0x01) << 31; if (b < 0x80) return toNum(l, h, s);
+
+    throw new Error('Expected varint not more than 10 bytes');
+}
+
+function toNum(low, high, isSigned) {
+    if (isSigned) {
+        return high * 0x100000000 + (low >>> 0);
+    }
+
+    return ((high >>> 0) * 0x100000000) + (low >>> 0);
+}
+
+function writeBigVarint(val, pbf) {
+    var low, high;
+
+    if (val >= 0) {
+        low  = (val % 0x100000000) | 0;
+        high = (val / 0x100000000) | 0;
+    } else {
+        low  = ~(-val % 0x100000000);
+        high = ~(-val / 0x100000000);
+
+        if (low ^ 0xffffffff) {
+            low = (low + 1) | 0;
+        } else {
+            low = 0;
+            high = (high + 1) | 0;
+        }
+    }
+
+    if (val >= 0x10000000000000000 || val < -0x10000000000000000) {
+        throw new Error('Given varint doesn\'t fit into 10 bytes');
+    }
+
+    pbf.realloc(10);
+
+    writeBigVarintLow(low, high, pbf);
+    writeBigVarintHigh(high, pbf);
+}
+
+function writeBigVarintLow(low, high, pbf) {
+    pbf.buf[pbf.pos++] = low & 0x7f | 0x80; low >>>= 7;
+    pbf.buf[pbf.pos++] = low & 0x7f | 0x80; low >>>= 7;
+    pbf.buf[pbf.pos++] = low & 0x7f | 0x80; low >>>= 7;
+    pbf.buf[pbf.pos++] = low & 0x7f | 0x80; low >>>= 7;
+    pbf.buf[pbf.pos]   = low & 0x7f;
+}
+
+function writeBigVarintHigh(high, pbf) {
+    var lsb = (high & 0x07) << 4;
+
+    pbf.buf[pbf.pos++] |= lsb         | ((high >>>= 3) ? 0x80 : 0); if (!high) return;
+    pbf.buf[pbf.pos++]  = high & 0x7f | ((high >>>= 7) ? 0x80 : 0); if (!high) return;
+    pbf.buf[pbf.pos++]  = high & 0x7f | ((high >>>= 7) ? 0x80 : 0); if (!high) return;
+    pbf.buf[pbf.pos++]  = high & 0x7f | ((high >>>= 7) ? 0x80 : 0); if (!high) return;
+    pbf.buf[pbf.pos++]  = high & 0x7f | ((high >>>= 7) ? 0x80 : 0); if (!high) return;
+    pbf.buf[pbf.pos++]  = high & 0x7f;
+}
+
+// Buffer code below from https://github.com/feross/buffer, MIT-licensed
+
+function readUtf8(buf, pos, end) {
+    var str = '';
+    var i = pos;
+
+    while (i < end) {
+        var b0 = buf[i];
+        var c = null; // codepoint
+        var bytesPerSequence =
+            b0 > 0xEF ? 4 :
+            b0 > 0xDF ? 3 :
+            b0 > 0xBF ? 2 : 1;
+
+        if (i + bytesPerSequence > end) break;
+
+        var b1, b2, b3;
+
+        if (bytesPerSequence === 1) {
+            if (b0 < 0x80) c = b0;
+        } else if (bytesPerSequence === 2) {
+            b1 = buf[i + 1];
+            if ((b1 & 0xC0) === 0x80) {
+                c = (b0 & 0x1F) << 0x6 | (b1 & 0x3F);
+                if (c <= 0x7F) c = null;
+            }
+        } else if (bytesPerSequence === 3) {
+            b1 = buf[i + 1];
+            b2 = buf[i + 2];
+            if ((b1 & 0xC0) === 0x80 && (b2 & 0xC0) === 0x80) {
+                c = (b0 & 0xF) << 0xC | (b1 & 0x3F) << 0x6 | (b2 & 0x3F);
+                if (c <= 0x7FF || (c >= 0xD800 && c <= 0xDFFF)) c = null;
+            }
+        } else if (bytesPerSequence === 4) {
+            b1 = buf[i + 1];
+            b2 = buf[i + 2];
+            b3 = buf[i + 3];
+            if ((b1 & 0xC0) === 0x80 && (b2 & 0xC0) === 0x80 && (b3 & 0xC0) === 0x80) {
+                c = (b0 & 0xF) << 0x12 | (b1 & 0x3F) << 0xC | (b2 & 0x3F) << 0x6 | (b3 & 0x3F);
+                if (c <= 0xFFFF || c >= 0x110000) c = null;
+            }
+        }
+
+        if (c === null) {
+            c = 0xFFFD;
+            bytesPerSequence = 1;
+
+        } else if (c > 0xFFFF) {
+            c -= 0x10000;
+            str += String.fromCharCode(c >>> 10 & 0x3FF | 0xD800);
+            c = 0xDC00 | c & 0x3FF;
+        }
+
+        str += String.fromCharCode(c);
+        i += bytesPerSequence;
+    }
+
+    return str;
+}
+
+function writeUtf8(buf, str, pos) {
+    for (var i = 0, c, lead; i < str.length; i++) {
+        c = str.charCodeAt(i); // code point
+
+        if (c > 0xD7FF && c < 0xE000) {
+            if (lead) {
+                if (c < 0xDC00) {
+                    buf[pos++] = 0xEF;
+                    buf[pos++] = 0xBF;
+                    buf[pos++] = 0xBD;
+                    lead = c;
+                    continue;
+                } else {
+                    c = lead - 0xD800 << 10 | c - 0xDC00 | 0x10000;
+                    lead = null;
+                }
+            } else {
+                if (c > 0xDBFF || (i + 1 === str.length)) {
+                    buf[pos++] = 0xEF;
+                    buf[pos++] = 0xBF;
+                    buf[pos++] = 0xBD;
+                } else {
+                    lead = c;
+                }
+                continue;
+            }
+        } else if (lead) {
+            buf[pos++] = 0xEF;
+            buf[pos++] = 0xBF;
+            buf[pos++] = 0xBD;
+            lead = null;
+        }
+
+        if (c < 0x80) {
+            buf[pos++] = c;
+        } else {
+            if (c < 0x800) {
+                buf[pos++] = c >> 0x6 | 0xC0;
+            } else {
+                if (c < 0x10000) {
+                    buf[pos++] = c >> 0xC | 0xE0;
+                } else {
+                    buf[pos++] = c >> 0x12 | 0xF0;
+                    buf[pos++] = c >> 0xC & 0x3F | 0x80;
+                }
+                buf[pos++] = c >> 0x6 & 0x3F | 0x80;
+            }
+            buf[pos++] = c & 0x3F | 0x80;
+        }
+    }
+    return pos;
+}
+
+// Buffer code below from https://github.com/feross/buffer, MIT-licensed
+
+function readUInt32(buf, pos) {
+    return ((buf[pos]) |
+        (buf[pos + 1] << 8) |
+        (buf[pos + 2] << 16)) +
+        (buf[pos + 3] * 0x1000000);
+}
+
+function writeInt32(buf, val, pos) {
+    buf[pos] = val;
+    buf[pos + 1] = (val >>> 8);
+    buf[pos + 2] = (val >>> 16);
+    buf[pos + 3] = (val >>> 24);
+}
+
+function readInt32(buf, pos) {
+    return ((buf[pos]) |
+        (buf[pos + 1] << 8) |
+        (buf[pos + 2] << 16)) +
+        (buf[pos + 3] << 24);
+}
 
 function Pbf(buf) {
-    this.buf = ArrayBuffer.isView && ArrayBuffer.isView(buf) ? buf : new Uint8Array(buf || 0);
+    this.buf = ArrayBuffer.isView(buf) ? buf : new Uint8Array(buf || 0);
     this.pos = 0;
     this.type = 0;
     this.length = this.buf.length;
@@ -924,7 +1125,7 @@ var SHIFT_LEFT_32 = (1 << 16) * (1 << 16),
 // Threshold chosen based on both benchmarking and knowledge about browser string
 // data structures (which currently switch structure types at 12 bytes or more)
 var TEXT_DECODER_MIN_LENGTH = 12;
-var utf8TextDecoder = typeof TextDecoder === 'undefined' ? null : new TextDecoder('utf8');
+var utf8TextDecoder = new TextDecoder('utf-8');
 
 Pbf.prototype = {
 
@@ -1025,7 +1226,7 @@ Pbf.prototype = {
 
         if (end - pos >= TEXT_DECODER_MIN_LENGTH && utf8TextDecoder) {
             // longer strings are fast with the built-in browser TextDecoder API
-            return readUtf8TextDecoder(this.buf, pos, end);
+            return utf8TextDecoder.decode(this.buf.subarray(pos, end));
         }
         // short strings are fast with our custom implementation
         return readUtf8(this.buf, pos, end);
@@ -1040,66 +1241,57 @@ Pbf.prototype = {
 
     // verbose for performance reasons; doesn't affect gzipped size
 
-    readPackedVarint: function(arr, isSigned) {
+    readPackedVarint: function(arr = [], isSigned) {
         if (this.type !== Pbf.Bytes) return arr.push(this.readVarint(isSigned));
         var end = readPackedEnd(this);
-        arr = arr || [];
         while (this.pos < end) arr.push(this.readVarint(isSigned));
         return arr;
     },
-    readPackedSVarint: function(arr) {
+    readPackedSVarint: function(arr = []) {
         if (this.type !== Pbf.Bytes) return arr.push(this.readSVarint());
         var end = readPackedEnd(this);
-        arr = arr || [];
         while (this.pos < end) arr.push(this.readSVarint());
         return arr;
     },
-    readPackedBoolean: function(arr) {
+    readPackedBoolean: function(arr = []) {
         if (this.type !== Pbf.Bytes) return arr.push(this.readBoolean());
         var end = readPackedEnd(this);
-        arr = arr || [];
         while (this.pos < end) arr.push(this.readBoolean());
         return arr;
     },
-    readPackedFloat: function(arr) {
+    readPackedFloat: function(arr = []) {
         if (this.type !== Pbf.Bytes) return arr.push(this.readFloat());
         var end = readPackedEnd(this);
-        arr = arr || [];
         while (this.pos < end) arr.push(this.readFloat());
         return arr;
     },
-    readPackedDouble: function(arr) {
+    readPackedDouble: function(arr = []) {
         if (this.type !== Pbf.Bytes) return arr.push(this.readDouble());
         var end = readPackedEnd(this);
-        arr = arr || [];
         while (this.pos < end) arr.push(this.readDouble());
         return arr;
     },
-    readPackedFixed32: function(arr) {
+    readPackedFixed32: function(arr = []) {
         if (this.type !== Pbf.Bytes) return arr.push(this.readFixed32());
         var end = readPackedEnd(this);
-        arr = arr || [];
         while (this.pos < end) arr.push(this.readFixed32());
         return arr;
     },
-    readPackedSFixed32: function(arr) {
+    readPackedSFixed32: function(arr = []) {
         if (this.type !== Pbf.Bytes) return arr.push(this.readSFixed32());
         var end = readPackedEnd(this);
-        arr = arr || [];
         while (this.pos < end) arr.push(this.readSFixed32());
         return arr;
     },
-    readPackedFixed64: function(arr) {
+    readPackedFixed64: function(arr = []) {
         if (this.type !== Pbf.Bytes) return arr.push(this.readFixed64());
         var end = readPackedEnd(this);
-        arr = arr || [];
         while (this.pos < end) arr.push(this.readFixed64());
         return arr;
     },
-    readPackedSFixed64: function(arr) {
+    readPackedSFixed64: function(arr = []) {
         if (this.type !== Pbf.Bytes) return arr.push(this.readSFixed64());
         var end = readPackedEnd(this);
-        arr = arr || [];
         while (this.pos < end) arr.push(this.readSFixed64());
         return arr;
     },
@@ -1302,78 +1494,9 @@ Pbf.prototype = {
     }
 };
 
-function readVarintRemainder(l, s, p) {
-    var buf = p.buf,
-        h, b;
-
-    b = buf[p.pos++]; h  = (b & 0x70) >> 4;  if (b < 0x80) return toNum(l, h, s);
-    b = buf[p.pos++]; h |= (b & 0x7f) << 3;  if (b < 0x80) return toNum(l, h, s);
-    b = buf[p.pos++]; h |= (b & 0x7f) << 10; if (b < 0x80) return toNum(l, h, s);
-    b = buf[p.pos++]; h |= (b & 0x7f) << 17; if (b < 0x80) return toNum(l, h, s);
-    b = buf[p.pos++]; h |= (b & 0x7f) << 24; if (b < 0x80) return toNum(l, h, s);
-    b = buf[p.pos++]; h |= (b & 0x01) << 31; if (b < 0x80) return toNum(l, h, s);
-
-    throw new Error('Expected varint not more than 10 bytes');
-}
-
 function readPackedEnd(pbf) {
     return pbf.type === Pbf.Bytes ?
         pbf.readVarint() + pbf.pos : pbf.pos + 1;
-}
-
-function toNum(low, high, isSigned) {
-    if (isSigned) {
-        return high * 0x100000000 + (low >>> 0);
-    }
-
-    return ((high >>> 0) * 0x100000000) + (low >>> 0);
-}
-
-function writeBigVarint(val, pbf) {
-    var low, high;
-
-    if (val >= 0) {
-        low  = (val % 0x100000000) | 0;
-        high = (val / 0x100000000) | 0;
-    } else {
-        low  = ~(-val % 0x100000000);
-        high = ~(-val / 0x100000000);
-
-        if (low ^ 0xffffffff) {
-            low = (low + 1) | 0;
-        } else {
-            low = 0;
-            high = (high + 1) | 0;
-        }
-    }
-
-    if (val >= 0x10000000000000000 || val < -0x10000000000000000) {
-        throw new Error('Given varint doesn\'t fit into 10 bytes');
-    }
-
-    pbf.realloc(10);
-
-    writeBigVarintLow(low, high, pbf);
-    writeBigVarintHigh(high, pbf);
-}
-
-function writeBigVarintLow(low, high, pbf) {
-    pbf.buf[pbf.pos++] = low & 0x7f | 0x80; low >>>= 7;
-    pbf.buf[pbf.pos++] = low & 0x7f | 0x80; low >>>= 7;
-    pbf.buf[pbf.pos++] = low & 0x7f | 0x80; low >>>= 7;
-    pbf.buf[pbf.pos++] = low & 0x7f | 0x80; low >>>= 7;
-    pbf.buf[pbf.pos]   = low & 0x7f;
-}
-
-function writeBigVarintHigh(high, pbf) {
-    var lsb = (high & 0x07) << 4;
-
-    pbf.buf[pbf.pos++] |= lsb         | ((high >>>= 3) ? 0x80 : 0); if (!high) return;
-    pbf.buf[pbf.pos++]  = high & 0x7f | ((high >>>= 7) ? 0x80 : 0); if (!high) return;
-    pbf.buf[pbf.pos++]  = high & 0x7f | ((high >>>= 7) ? 0x80 : 0); if (!high) return;
-    pbf.buf[pbf.pos++]  = high & 0x7f | ((high >>>= 7) ? 0x80 : 0); if (!high) return;
-    pbf.buf[pbf.pos++]  = high & 0x7f | ((high >>>= 7) ? 0x80 : 0); if (!high) return;
-    pbf.buf[pbf.pos++]  = high & 0x7f;
 }
 
 function makeRoomForExtraLength(startPos, len, pbf) {
@@ -1387,161 +1510,15 @@ function makeRoomForExtraLength(startPos, len, pbf) {
     for (var i = pbf.pos - 1; i >= startPos; i--) pbf.buf[i + extraLen] = pbf.buf[i];
 }
 
-function writePackedVarint(arr, pbf)   { for (var i = 0; i < arr.length; i++) pbf.writeVarint(arr[i]);   }
-function writePackedSVarint(arr, pbf)  { for (var i = 0; i < arr.length; i++) pbf.writeSVarint(arr[i]);  }
-function writePackedFloat(arr, pbf)    { for (var i = 0; i < arr.length; i++) pbf.writeFloat(arr[i]);    }
-function writePackedDouble(arr, pbf)   { for (var i = 0; i < arr.length; i++) pbf.writeDouble(arr[i]);   }
-function writePackedBoolean(arr, pbf)  { for (var i = 0; i < arr.length; i++) pbf.writeBoolean(arr[i]);  }
-function writePackedFixed32(arr, pbf)  { for (var i = 0; i < arr.length; i++) pbf.writeFixed32(arr[i]);  }
-function writePackedSFixed32(arr, pbf) { for (var i = 0; i < arr.length; i++) pbf.writeSFixed32(arr[i]); }
-function writePackedFixed64(arr, pbf)  { for (var i = 0; i < arr.length; i++) pbf.writeFixed64(arr[i]);  }
-function writePackedSFixed64(arr, pbf) { for (var i = 0; i < arr.length; i++) pbf.writeSFixed64(arr[i]); }
-
-// Buffer code below from https://github.com/feross/buffer, MIT-licensed
-
-function readUInt32(buf, pos) {
-    return ((buf[pos]) |
-        (buf[pos + 1] << 8) |
-        (buf[pos + 2] << 16)) +
-        (buf[pos + 3] * 0x1000000);
-}
-
-function writeInt32(buf, val, pos) {
-    buf[pos] = val;
-    buf[pos + 1] = (val >>> 8);
-    buf[pos + 2] = (val >>> 16);
-    buf[pos + 3] = (val >>> 24);
-}
-
-function readInt32(buf, pos) {
-    return ((buf[pos]) |
-        (buf[pos + 1] << 8) |
-        (buf[pos + 2] << 16)) +
-        (buf[pos + 3] << 24);
-}
-
-function readUtf8(buf, pos, end) {
-    var str = '';
-    var i = pos;
-
-    while (i < end) {
-        var b0 = buf[i];
-        var c = null; // codepoint
-        var bytesPerSequence =
-            b0 > 0xEF ? 4 :
-            b0 > 0xDF ? 3 :
-            b0 > 0xBF ? 2 : 1;
-
-        if (i + bytesPerSequence > end) break;
-
-        var b1, b2, b3;
-
-        if (bytesPerSequence === 1) {
-            if (b0 < 0x80) {
-                c = b0;
-            }
-        } else if (bytesPerSequence === 2) {
-            b1 = buf[i + 1];
-            if ((b1 & 0xC0) === 0x80) {
-                c = (b0 & 0x1F) << 0x6 | (b1 & 0x3F);
-                if (c <= 0x7F) {
-                    c = null;
-                }
-            }
-        } else if (bytesPerSequence === 3) {
-            b1 = buf[i + 1];
-            b2 = buf[i + 2];
-            if ((b1 & 0xC0) === 0x80 && (b2 & 0xC0) === 0x80) {
-                c = (b0 & 0xF) << 0xC | (b1 & 0x3F) << 0x6 | (b2 & 0x3F);
-                if (c <= 0x7FF || (c >= 0xD800 && c <= 0xDFFF)) {
-                    c = null;
-                }
-            }
-        } else if (bytesPerSequence === 4) {
-            b1 = buf[i + 1];
-            b2 = buf[i + 2];
-            b3 = buf[i + 3];
-            if ((b1 & 0xC0) === 0x80 && (b2 & 0xC0) === 0x80 && (b3 & 0xC0) === 0x80) {
-                c = (b0 & 0xF) << 0x12 | (b1 & 0x3F) << 0xC | (b2 & 0x3F) << 0x6 | (b3 & 0x3F);
-                if (c <= 0xFFFF || c >= 0x110000) {
-                    c = null;
-                }
-            }
-        }
-
-        if (c === null) {
-            c = 0xFFFD;
-            bytesPerSequence = 1;
-
-        } else if (c > 0xFFFF) {
-            c -= 0x10000;
-            str += String.fromCharCode(c >>> 10 & 0x3FF | 0xD800);
-            c = 0xDC00 | c & 0x3FF;
-        }
-
-        str += String.fromCharCode(c);
-        i += bytesPerSequence;
-    }
-
-    return str;
-}
-
-function readUtf8TextDecoder(buf, pos, end) {
-    return utf8TextDecoder.decode(buf.subarray(pos, end));
-}
-
-function writeUtf8(buf, str, pos) {
-    for (var i = 0, c, lead; i < str.length; i++) {
-        c = str.charCodeAt(i); // code point
-
-        if (c > 0xD7FF && c < 0xE000) {
-            if (lead) {
-                if (c < 0xDC00) {
-                    buf[pos++] = 0xEF;
-                    buf[pos++] = 0xBF;
-                    buf[pos++] = 0xBD;
-                    lead = c;
-                    continue;
-                } else {
-                    c = lead - 0xD800 << 10 | c - 0xDC00 | 0x10000;
-                    lead = null;
-                }
-            } else {
-                if (c > 0xDBFF || (i + 1 === str.length)) {
-                    buf[pos++] = 0xEF;
-                    buf[pos++] = 0xBF;
-                    buf[pos++] = 0xBD;
-                } else {
-                    lead = c;
-                }
-                continue;
-            }
-        } else if (lead) {
-            buf[pos++] = 0xEF;
-            buf[pos++] = 0xBF;
-            buf[pos++] = 0xBD;
-            lead = null;
-        }
-
-        if (c < 0x80) {
-            buf[pos++] = c;
-        } else {
-            if (c < 0x800) {
-                buf[pos++] = c >> 0x6 | 0xC0;
-            } else {
-                if (c < 0x10000) {
-                    buf[pos++] = c >> 0xC | 0xE0;
-                } else {
-                    buf[pos++] = c >> 0x12 | 0xF0;
-                    buf[pos++] = c >> 0xC & 0x3F | 0x80;
-                }
-                buf[pos++] = c >> 0x6 & 0x3F | 0x80;
-            }
-            buf[pos++] = c & 0x3F | 0x80;
-        }
-    }
-    return pos;
-}
+function writePackedVarint(arr, pbf)   { arr.forEach(pbf.writeVarint, pbf);   }
+function writePackedSVarint(arr, pbf)  { arr.forEach(pbf.writeSVarint, pbf);  }
+function writePackedFloat(arr, pbf)    { arr.forEach(pbf.writeFloat, pbf);    }
+function writePackedDouble(arr, pbf)   { arr.forEach(pbf.writeDouble, pbf);   }
+function writePackedBoolean(arr, pbf)  { arr.forEach(pbf.writeBoolean, pbf);  }
+function writePackedFixed32(arr, pbf)  { arr.forEach(pbf.writeFixed32, pbf);  }
+function writePackedSFixed32(arr, pbf) { arr.forEach(pbf.writeSFixed32, pbf); }
+function writePackedFixed64(arr, pbf)  { arr.forEach(pbf.writeFixed64, pbf);  }
+function writePackedSFixed64(arr, pbf) { arr.forEach(pbf.writeSFixed64, pbf); }
 
 class AlphaImage {
   // See maplibre-gl-js/src/util/image.js
@@ -1633,7 +1610,7 @@ const GLYPH_PBF_BORDER$1 = 3;
 function parseGlyphPbf(data) {
   // See maplibre-gl-js/src/style/parse_glyph_pbf.js
   // Input is an ArrayBuffer, which will be read as a Uint8Array
-  return new pbf(data).readFields(readFontstacks, []);
+  return new Pbf(data).readFields(readFontstacks, []);
 }
 
 function readFontstacks(tag, glyphs, pbf) {
@@ -3868,11 +3845,11 @@ function classifyRings(rings) {
   // Classifies an array of rings into polygons with outer rings and holes
   if (rings.length <= 1) return [rings];
 
-  var polygons = [];
-  var polygon, ccw;
+  const polygons = [];
+  let polygon, ccw;
 
   rings.forEach(ring => {
-    let area = signedArea(ring);
+    const area = signedArea(ring);
     if (area === 0) return;
 
     if (ccw === undefined) ccw = area < 0;
@@ -3899,6 +3876,58 @@ function signedArea(ring) {
     .reduce( (sum, p1, i) => sum + xmul(p1, ring[i]), initialValue );
 }
 
+const types = ["Unknown", "Point", "LineString", "Polygon"];
+
+function toGeoJSON(size, sx = 0, sy = 0) {
+  // Input size is the side length of the (square) area over which the
+  //  coordinate space of this tile [0, this.extent] will be rendered.
+  // Input sx, sy is the origin (top left corner) of the output coordinates
+  //  within the (size x size) rendered area of the full tile.
+
+  size = size || this.extent;
+  const scale = size / this.extent;
+  let coords = this.loadGeometry();
+  let type = types[this.type];
+
+  function project(line) {
+    return line.map(p => [p.x * scale - sx, p.y * scale - sy]);
+  }
+
+  switch (type) {
+    case "Point":
+      coords = project( coords.map(p => p[0]) );
+      break;
+
+    case "LineString":
+      coords = coords.map(project);
+      break;
+
+    case "Polygon":
+      coords = classifyRings(coords);
+      coords = coords.map(polygon => polygon.map(project));
+      break;
+  }
+
+  if (coords.length === 1) {
+    coords = coords[0];
+  } else {
+    type = "Multi" + type;
+  }
+
+  const result = {
+    type: "Feature",
+    geometry: {
+      type: type,
+      coordinates: coords
+    },
+    properties: this.properties
+  };
+
+  if ("id" in this) result.id = this.id;
+
+  return result;
+}
+
 function VectorTileFeature(pbf, end, extent, keys, values) {
   // Public
   this.properties = {};
@@ -3922,32 +3951,31 @@ function readFeature(tag, feature, pbf) {
 }
 
 function readTag(pbf, feature) {
-  var end = pbf.readVarint() + pbf.pos;
+  const end = pbf.readVarint() + pbf.pos;
+  const { _keys, _values } = feature;
 
   while (pbf.pos < end) {
-    var key = feature._keys[pbf.readVarint()],
-      value = feature._values[pbf.readVarint()];
+    const key = _keys[pbf.readVarint()];
+    const value = _values[pbf.readVarint()];
     feature.properties[key] = value;
   }
 }
 
-VectorTileFeature.types = ['Unknown', 'Point', 'LineString', 'Polygon'];
-
 VectorTileFeature.prototype.loadGeometry = function() {
-  var pbf = this._pbf;
+  const pbf = this._pbf;
   pbf.pos = this._geometry;
 
-  var end = pbf.readVarint() + pbf.pos,
-    cmd = 1,
-    length = 0,
-    x = 0,
-    y = 0,
-    lines = [],
-    line;
+  const end = pbf.readVarint() + pbf.pos;
+  let cmd = 1;
+  let length = 0;
+  let x = 0;
+  let y = 0;
+  const lines = [];
+  let line;
 
   while (pbf.pos < end) {
     if (length <= 0) {
-      var cmdLen = pbf.readVarint();
+      const cmdLen = pbf.readVarint();
       cmd = cmdLen & 0x7;
       length = cmdLen >> 3;
     }
@@ -3973,7 +4001,7 @@ VectorTileFeature.prototype.loadGeometry = function() {
       });
 
     } else {
-      throw new Error('unknown command ' + cmd);
+      throw Error("unknown command " + cmd);
     }
   }
 
@@ -3983,22 +4011,22 @@ VectorTileFeature.prototype.loadGeometry = function() {
 };
 
 VectorTileFeature.prototype.bbox = function() {
-  var pbf = this._pbf;
+  const pbf = this._pbf;
   pbf.pos = this._geometry;
 
-  var end = pbf.readVarint() + pbf.pos,
-  cmd = 1,
-  length = 0,
-  x = 0,
-  y = 0,
-  x1 = Infinity,
-  x2 = -Infinity,
-  y1 = Infinity,
-  y2 = -Infinity;
+  const end = pbf.readVarint() + pbf.pos;
+  let cmd = 1;
+  let length = 0;
+  let x = 0;
+  let y = 0;
+  let x1 = Infinity;
+  let x2 = -Infinity;
+  let y1 = Infinity;
+  let y2 = -Infinity;
 
   while (pbf.pos < end) {
     if (length <= 0) {
-      var cmdLen = pbf.readVarint();
+      const cmdLen = pbf.readVarint();
       cmd = cmdLen & 0x7;
       length = cmdLen >> 3;
     }
@@ -4014,62 +4042,15 @@ VectorTileFeature.prototype.bbox = function() {
       if (y > y2) y2 = y;
 
     } else if (cmd !== 7) {
-      throw new Error('unknown command ' + cmd);
+      throw Error("unknown command " + cmd);
     }
   }
 
   return [x1, y1, x2, y2];
 };
 
-VectorTileFeature.prototype.toGeoJSON = function(size, sx = 0, sy = 0) {
-  // Input size is the side length of the (square) area over which the
-  //  coordinate space of this tile [0, this.extent] will be rendered.
-  // Input sx, sy is the origin (top left corner) of the output coordinates
-  //  within the (size x size) rendered area of the full tile.
-
-  size = size || this.extent;
-  var scale = size / this.extent,
-    coords = this.loadGeometry(),
-    type = VectorTileFeature.types[this.type];
-
-  function project(line) {
-    return line.map(p => [p.x * scale - sx, p.y * scale - sy]);
-  }
-
-  switch (type) {
-    case "Point":
-      coords = project( coords.map(p => p[0]) );
-      break;
-
-    case "LineString":
-      coords = coords.map(project);
-      break;
-
-    case "Polygon":
-      coords = classifyRings(coords);
-      coords = coords.map(polygon => polygon.map(project));
-      break;
-  }
-
-  if (coords.length === 1) {
-    coords = coords[0];
-  } else {
-    type = 'Multi' + type;
-  }
-
-  var result = {
-    type: "Feature",
-    geometry: {
-      type: type,
-      coordinates: coords
-    },
-    properties: this.properties
-  };
-
-  if ('id' in this) result.id = this.id;
-
-  return result;
-};
+VectorTileFeature.types = types;
+VectorTileFeature.prototype.toGeoJSON = toGeoJSON;
 
 function VectorTileLayer(pbf, end) {
   // Public
@@ -4099,11 +4080,11 @@ function readLayer(tag, layer, pbf) {
 }
 
 function readValueMessage(pbf) {
-  var value = null,
-  end = pbf.readVarint() + pbf.pos;
+  let value = null;
+  const end = pbf.readVarint() + pbf.pos;
 
   while (pbf.pos < end) {
-    var tag = pbf.readVarint() >> 3;
+    const tag = pbf.readVarint() >> 3;
 
     value = tag === 1 ? pbf.readString() :
       tag === 2 ? pbf.readFloat() :
@@ -4119,12 +4100,15 @@ function readValueMessage(pbf) {
 
 // return feature 'i' from this layer as a 'VectorTileFeature'
 VectorTileLayer.prototype.feature = function(i) {
-  if (i < 0 || i >= this._features.length) throw new Error('feature index out of bounds');
+  const { _features, extent, _pbf, _keys, _values } = this;
 
-  this._pbf.pos = this._features[i];
+  const lastFeature = _features.length - 1;
+  if (i < 0 || i > lastFeature) throw Error("feature index out of bounds");
 
-  var end = this._pbf.readVarint() + this._pbf.pos;
-  return new VectorTileFeature(this._pbf, end, this.extent, this._keys, this._values);
+  _pbf.pos = _features[i];
+
+  const end = _pbf.readVarint() + _pbf.pos;
+  return new VectorTileFeature(_pbf, end, extent, _keys, _values);
 };
 
 VectorTileLayer.prototype.toGeoJSON = function(size, sx, sy) {
@@ -4141,7 +4125,7 @@ function VectorTile(pbf, end) {
 
 function readTile(tag, layers, pbf) {
   if (tag === 3) {
-    var layer = new VectorTileLayer(pbf, pbf.readVarint() + pbf.pos);
+    const layer = new VectorTileLayer(pbf, pbf.readVarint() + pbf.pos);
     if (layer.length) layers[layer.name] = layer;
   }
 }
@@ -4193,7 +4177,7 @@ function initMVT(source) {
 
     function parseMVT(err, data) {
       if (err) return callback(err, data);
-      const tile = new VectorTile(new pbf(data));
+      const tile = new VectorTile(new Pbf(data));
       const json = Object.values(tile.layers)
         .reduce((d, l) => (d[l.name] = l.toGeoJSON(size), d), {});
       callback(null, json);
