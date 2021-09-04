@@ -37,12 +37,12 @@
     "rollup": "^2.52.7"
   },
   "dependencies": {
-    "chunked-queue": "^0.1.4",
-    "pbf-esm": "^4.0.1",
     "rbush": "^3.0.1",
     "tile-gl": "^0.2.2",
     "tile-labeler": "^0.4.1",
-    "tile-retriever": "^0.0.4",
     "tile-stencil": "^0.4.4"
+  },
+  "peerDependencies": {
+    "pbf-esm": "^4.0.1"
   }
 }

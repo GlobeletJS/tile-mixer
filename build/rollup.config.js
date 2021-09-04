@@ -1,26 +1,17 @@
 import resolve from '@rollup/plugin-node-resolve';
-import { worker } from "./worker-plugin.js";
 import pkg from "../package.json";
 
-export default [{
-  input: 'src/worker/worker.js',
+export default {
+  input: 'src/index.js',
   plugins: [
-    resolve({ dedupe: ["pbf-esm"] }),
+    resolve(),
   ],
-  output: {
-    file: 'build/worker.bundle.js',
-    format: 'esm',
-    name: pkg.name,
-  }
-}, {
-  input: 'src/main.js',
-  plugins: [
-    resolve({ dedupe: ["pbf-esm"] }),
-    worker(),
+  external: [
+    ...Object.keys(pkg.peerDependencies || {})
   ],
   output: {
     file: pkg.main,
     format: 'esm',
     name: pkg.name,
   }
-}];
+};
