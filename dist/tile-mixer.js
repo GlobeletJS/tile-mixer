@@ -3089,14 +3089,14 @@ function initBufferConstructors(styles) {
 }
 
 function initLayerSerializer(style) {
-  const { id, interactive } = style;
+  const { id, type, interactive } = style;
 
   const transform = initSerializer(style);
 
   if (!transform) return;
 
   return function(layer, tileCoords, atlas, tree) {
-    const { type, extent, features } = layer;
+    const { extent, features } = layer;
 
     const transformed = features.map(feature => {
       const { properties, geometry } = feature;

@@ -78,8 +78,8 @@ For more information about glyphs and SDFs, see the [tile-labeler][] module.
 The `.layers` property points to a dictionary of layers of processed tile data,
 keyed on the ID of the relevant style layer. Each layer has the following
 properties:
-- `type`: A GeoJSON field, set to "FeatureCollection" for now.
-  (NOTE: this may be changed to the type of the style layer)
+- `type`: The [type of the style layer][styleType] that defines how these
+  features will be rendered
 - `extent`: The extent of the geometry of the features in the layer (See the
   [vector tile specification][vector tile])
 - `buffers`: Geometry and style information for the features of the layer,
@@ -89,4 +89,5 @@ properties:
   for interactive querying of individual layer features
 
 [tile-labeler]: https://github.com/GlobeletJS/tile-labeler
+[styleType]: https://maplibre.org/maplibre-gl-js-docs/style-spec/layers/#type
 [tile-gl]: https://github.com/GlobeletJS/tile-gl
