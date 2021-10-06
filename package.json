@@ -1,7 +1,7 @@
 {
   "name": "tile-mixer",
   "version": "0.2.1",
-  "description": "Load vector tiles, re-mixing the layers based on a MapLibre style document",
+  "description": "Re-mix vector tile layers based on a MapLibre style document",
   "main": "dist/tile-mixer.js",
   "module": "dist/tile-mixer.js",
   "files": [
@@ -38,8 +38,8 @@
   },
   "dependencies": {
     "rbush": "^3.0.1",
-    "tile-gl": "^0.2.2",
-    "tile-labeler": "^0.4.1",
+    "tile-gl": "^0.2.3",
+    "tile-labeler": "^0.4.2",
     "tile-stencil": "^0.4.4"
   },
   "peerDependencies": {

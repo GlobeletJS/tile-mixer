@@ -23,7 +23,7 @@ See below for details of the returned data structure.
 ## Initialization
 A tile-mixer function can be initialized as follows:
 ```javascript
-import * as tileMixer 'tile-mixer';
+import * as tileMixer from 'tile-mixer';
 
 const mixer = tileMixer.init(parameters);
 ```
