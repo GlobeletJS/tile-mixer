@@ -32,13 +32,13 @@
   "homepage": "https://github.com/GlobeletJS/tile-mixer#readme",
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^13.0.0",
-    "eslint": "^7.30.0",
+    "eslint": "^8.0.0",
     "eslint-config-globeletjs": "^0.0.6",
     "rollup": "^2.52.7"
   },
   "dependencies": {
     "rbush": "^3.0.1",
-    "tile-gl": "^0.2.3",
+    "tile-gl": "^0.2.4",
     "tile-labeler": "^0.4.2",
     "tile-stencil": "^0.4.4"
   },

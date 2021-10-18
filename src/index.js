@@ -1,7 +1,7 @@
 import { getStyleFuncs } from "tile-stencil";
 import { initSourceFilter } from "./filter.js";
 import { initAtlasGetter } from "tile-labeler";
-import { initBufferConstructors } from "./buffers.js";
+import { initTileSerializer } from "tile-gl";
 
 export function init(userParams) {
   const { glyphEndpoint, styles } = setParams(userParams);
@@ -9,7 +9,7 @@ export function init(userParams) {
 
   const sourceFilter = initSourceFilter(parsedStyles);
   const getAtlas = initAtlasGetter({ parsedStyles, glyphEndpoint });
-  const process = initBufferConstructors(parsedStyles);
+  const process = initTileSerializer(parsedStyles);
 
   return function(source, tileCoords) {
     const rawLayers = sourceFilter(source, tileCoords.z);
