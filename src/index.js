@@ -1,32 +1,19 @@
-import { getStyleFuncs } from "tile-stencil";
-import { initSourceFilter } from "./filter.js";
-import { initAtlasGetter } from "tile-labeler";
-import { initTileSerializer } from "tile-gl";
+import { initLayerFilter } from "./filter.js";
 
 export function init(userParams) {
-  const { glyphEndpoint, styles } = setParams(userParams);
-  const parsedStyles = styles.map(getStyleFuncs);
+  const { layers } = setParams(userParams);
 
-  const sourceFilter = initSourceFilter(parsedStyles);
-  const getAtlas = initAtlasGetter({ parsedStyles, glyphEndpoint });
-  const process = initTileSerializer(parsedStyles);
+  const filters = layers.map(initLayerFilter);
 
-  return function(source, tileCoords) {
-    const rawLayers = sourceFilter(source, tileCoords.z);
-
-    return getAtlas(rawLayers, tileCoords.z).then(atlas => {
-      const layers = process(rawLayers, tileCoords, atlas);
-
-      // Note: atlas.data.buffer is a Transferable
-      return { atlas: atlas.image, layers };
-    });
+  return function(source, zoom) {
+    return filters.reduce((d, f) => Object.assign(d, f(source, zoom)), {});
   };
 }
 
 const vectorTypes = ["symbol", "circle", "line", "fill"];
 
 function setParams(userParams) {
-  const { glyphs, layers } = userParams;
+  const { layers } = userParams;
 
   // Confirm supplied styles are all vector layers reading from the same source
   if (!layers || !layers.length) fail("no valid array of style layers");
@@ -37,9 +24,7 @@ function setParams(userParams) {
   const sameSource = layers.every(l => l.source === layers[0].source);
   if (!sameSource) fail("supplied layers use different sources");
 
-  // TODO: check typeof glyphs. Should be a string, but what if undefined?
-
-  return { glyphEndpoint: glyphs, styles: layers };
+  return { layers };
 }
 
 function fail(message) {

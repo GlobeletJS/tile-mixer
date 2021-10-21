@@ -1,14 +1,6 @@
 import { buildFeatureFilter } from "tile-stencil";
 
-export function initSourceFilter(styles) {
-  const filters = styles.map(initLayerFilter);
-
-  return function(source, z) {
-    return filters.reduce((d, f) => Object.assign(d, f(source, z)), {});
-  };
-}
-
-function initLayerFilter(style) {
+export function initLayerFilter(style) {
   const { id, type: styleType, filter,
     minzoom = 0, maxzoom = 99,
     "source-layer": sourceLayer,

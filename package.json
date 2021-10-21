@@ -37,9 +37,6 @@
     "rollup": "^2.52.7"
   },
   "dependencies": {
-    "rbush": "^3.0.1",
-    "tile-gl": "^0.2.4",
-    "tile-labeler": "^0.4.2",
     "tile-stencil": "^0.4.4"
   },
   "peerDependencies": {
