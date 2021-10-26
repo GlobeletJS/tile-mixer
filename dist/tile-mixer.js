@@ -79,12 +79,11 @@ function initFeatureValGetter(key) {
 }
 
 function initLayerFilter(style) {
-  const { id, type: styleType, filter,
-    minzoom = 0, maxzoom = 99,
+  const { id, filter, minzoom = 0, maxzoom = 99,
     "source-layer": sourceLayer,
   } = style;
 
-  const filterObject = composeFilters(getGeomFilter(styleType), filter);
+  const filterObject = composeFilters(getGeomFilter(style), filter);
   const parsedFilter = buildFeatureFilter(filterObject);
 
   return function(source, zoom) {
@@ -106,16 +105,14 @@ function composeFilters(filter1, filter2) {
   return ["all", filter1, filter2];
 }
 
-function getGeomFilter(type) {
-  switch (type) {
+function getGeomFilter(style) {
+  switch (style.type) {
     case "circle":
       return ["==", "$type", "Point"];
     case "line":
       return ["!=", "$type", "Point"]; // Could be LineString or Polygon
     case "fill":
       return ["==", "$type", "Polygon"];
-    case "symbol":
-      return ["==", "$type", "Point"]; // TODO: implement line geom labels
     default:
       return; // No condition on geometry
   }
