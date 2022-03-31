@@ -38,8 +38,5 @@
   },
   "dependencies": {
     "tile-stencil": "^0.4.9"
-  },
-  "peerDependencies": {
-    "pbf-esm": "^4.0.1"
   }
 }
