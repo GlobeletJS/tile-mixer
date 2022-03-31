@@ -37,6 +37,6 @@
     "rollup": "^2.70.1"
   },
   "dependencies": {
-    "tile-stencil": "^0.4.9"
+    "tile-stencil": "^0.4.10"
   }
 }
